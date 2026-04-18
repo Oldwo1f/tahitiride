@@ -28,12 +28,12 @@
 set -euo pipefail
 
 # ---- Helpers de log ----
-RED='\033[0;31m'
-GRN='\033[0;32m'
-YEL='\033[1;33m'
-BLU='\033[0;34m'
-DIM='\033[2m'
-RST='\033[0m'
+if [[ -t 1 ]]; then
+  RED='\033[0;31m'; GRN='\033[0;32m'; YEL='\033[1;33m'
+  BLU='\033[0;34m'; DIM='\033[2m';   RST='\033[0m'
+else
+  RED=''; GRN=''; YEL=''; BLU=''; DIM=''; RST=''
+fi
 
 log()   { printf "${BLU}==> %s${RST}\n" "$*"; }
 ok()    { printf "${GRN}✓ %s${RST}\n" "$*"; }

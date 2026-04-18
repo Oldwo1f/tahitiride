@@ -228,6 +228,30 @@ docker compose exec db pg_dump -U tahiti tahiti_ride > backup-$(date +%F).sql
 cat backup.sql | docker compose exec -T db psql -U tahiti tahiti_ride
 ```
 
+### Script de déploiement (`scripts/deploy.sh`)
+
+À utiliser **sur le serveur**, depuis la racine du projet, pour automatiser le cycle `git pull` → rebuild → restart → health-check → tail logs.
+
+```bash
+# Tout reconstruire (backend + frontend)
+./scripts/deploy.sh
+
+# Seulement le backend ou seulement le frontend
+./scripts/deploy.sh backend
+./scripts/deploy.sh frontend
+
+# Build complet sans cache (utile après changement de Dockerfile)
+./scripts/deploy.sh frontend --no-cache
+
+# Sans git pull (si déjà à jour)
+./scripts/deploy.sh --no-pull
+
+# Aide complète
+./scripts/deploy.sh --help
+```
+
+Le script vérifie la présence de `docker-compose.yml` et `.env`, fait le `git pull --ff-only`, build, `up -d`, attend les health-checks, puis affiche les 30 dernières lignes de logs.
+
 ### Reset complet
 
 ```bash
