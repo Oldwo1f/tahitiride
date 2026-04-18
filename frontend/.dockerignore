@@ -18,5 +18,4 @@ pnpm-debug.log*
 *.log
 Dockerfile
 .dockerignore
-nginx.conf
 README.md
