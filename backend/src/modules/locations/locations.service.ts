@@ -9,6 +9,7 @@ export interface NearbyDriver {
   vehicle_id: string | null;
   plate: string | null;
   direction: Direction;
+  destination: string | null;
   lng: number;
   lat: number;
   heading: number | null;
@@ -20,6 +21,7 @@ export interface NearbyPassenger {
   user_id: string;
   full_name: string;
   direction: Direction;
+  destination: string | null;
   lng: number;
   lat: number;
   distance_m: number;
@@ -38,20 +40,30 @@ export class LocationsService {
     userId: string;
     vehicleId: string;
     direction: Direction;
+    destination: string | null;
     position: PositionDto;
     heading: number | null;
     speed: number | null;
   }): Promise<void> {
-    const { userId, vehicleId, direction, position, heading, speed } = params;
+    const {
+      userId,
+      vehicleId,
+      direction,
+      destination,
+      position,
+      heading,
+      speed,
+    } = params;
     await this.ds.query(
       `INSERT INTO driver_status
-         (user_id, vehicle_id, is_online, direction, current_position, heading, speed, last_seen_at)
-       VALUES ($1, $2, true, $3::direction_enum,
-         ST_SetSRID(ST_MakePoint($4, $5), 4326)::geography, $6, $7, NOW())
+         (user_id, vehicle_id, is_online, direction, destination, current_position, heading, speed, last_seen_at)
+       VALUES ($1, $2, true, $3::direction_enum, $4,
+         ST_SetSRID(ST_MakePoint($5, $6), 4326)::geography, $7, $8, NOW())
        ON CONFLICT (user_id) DO UPDATE SET
          vehicle_id = EXCLUDED.vehicle_id,
          is_online = true,
          direction = EXCLUDED.direction,
+         destination = EXCLUDED.destination,
          current_position = EXCLUDED.current_position,
          heading = EXCLUDED.heading,
          speed = EXCLUDED.speed,
@@ -60,6 +72,7 @@ export class LocationsService {
         userId,
         vehicleId,
         direction,
+        destination,
         position.lng,
         position.lat,
         heading,
@@ -98,20 +111,22 @@ export class LocationsService {
   async passengerWait(params: {
     userId: string;
     direction: Direction;
+    destination: string | null;
     position: PositionDto;
   }): Promise<void> {
-    const { userId, direction, position } = params;
+    const { userId, direction, destination, position } = params;
     await this.ds.query(
       `INSERT INTO passenger_waits
-         (user_id, is_waiting, direction, position, updated_at)
-       VALUES ($1, true, $2::direction_enum,
-         ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography, NOW())
+         (user_id, is_waiting, direction, destination, position, updated_at)
+       VALUES ($1, true, $2::direction_enum, $3,
+         ST_SetSRID(ST_MakePoint($4, $5), 4326)::geography, NOW())
        ON CONFLICT (user_id) DO UPDATE SET
          is_waiting = true,
          direction = EXCLUDED.direction,
+         destination = EXCLUDED.destination,
          position = EXCLUDED.position,
          updated_at = NOW()`,
-      [userId, direction, position.lng, position.lat],
+      [userId, direction, destination, position.lng, position.lat],
     );
   }
 
@@ -141,6 +156,7 @@ export class LocationsService {
     lat: number;
     is_online: boolean;
     direction: Direction | null;
+    destination: string | null;
     vehicle_id: string | null;
   } | null> {
     const rows: Array<{
@@ -148,11 +164,12 @@ export class LocationsService {
       lat: string;
       is_online: boolean;
       direction: Direction | null;
+      destination: string | null;
       vehicle_id: string | null;
     }> = await this.ds.query(
       `SELECT ST_X(current_position::geometry) AS lng,
               ST_Y(current_position::geometry) AS lat,
-              is_online, direction, vehicle_id
+              is_online, direction, destination, vehicle_id
        FROM driver_status WHERE user_id = $1`,
       [userId],
     );
@@ -162,6 +179,7 @@ export class LocationsService {
       lat: Number(rows[0].lat),
       is_online: rows[0].is_online,
       direction: rows[0].direction,
+      destination: rows[0].destination,
       vehicle_id: rows[0].vehicle_id,
     };
   }
@@ -171,16 +189,18 @@ export class LocationsService {
     lat: number;
     is_waiting: boolean;
     direction: Direction | null;
+    destination: string | null;
   } | null> {
     const rows: Array<{
       lng: string;
       lat: string;
       is_waiting: boolean;
       direction: Direction | null;
+      destination: string | null;
     }> = await this.ds.query(
       `SELECT ST_X(position::geometry) AS lng,
               ST_Y(position::geometry) AS lat,
-              is_waiting, direction
+              is_waiting, direction, destination
        FROM passenger_waits WHERE user_id = $1`,
       [userId],
     );
@@ -190,6 +210,7 @@ export class LocationsService {
       lat: Number(rows[0].lat),
       is_waiting: rows[0].is_waiting,
       direction: rows[0].direction,
+      destination: rows[0].destination,
     };
   }
 
@@ -203,11 +224,12 @@ export class LocationsService {
       user_id: string;
       full_name: string;
       direction: Direction;
+      destination: string | null;
       lng: string;
       lat: string;
       distance_m: string;
     }> = await this.ds.query(
-      `SELECT u.id AS user_id, u.full_name, pw.direction,
+      `SELECT u.id AS user_id, u.full_name, pw.direction, pw.destination,
               ST_X(pw.position::geometry) AS lng,
               ST_Y(pw.position::geometry) AS lat,
               ST_Distance(pw.position, ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography) AS distance_m
@@ -222,6 +244,7 @@ export class LocationsService {
       user_id: r.user_id,
       full_name: r.full_name,
       direction: r.direction,
+      destination: r.destination,
       lng: Number(r.lng),
       lat: Number(r.lat),
       distance_m: Number(r.distance_m),
@@ -240,6 +263,7 @@ export class LocationsService {
       vehicle_id: string | null;
       plate: string | null;
       direction: Direction;
+      destination: string | null;
       lng: string;
       lat: string;
       heading: number | null;
@@ -247,7 +271,7 @@ export class LocationsService {
       distance_m: string;
     }> = await this.ds.query(
       `SELECT u.id AS user_id, u.full_name, ds.vehicle_id, v.plate,
-              ds.direction,
+              ds.direction, ds.destination,
               ST_X(ds.current_position::geometry) AS lng,
               ST_Y(ds.current_position::geometry) AS lat,
               ds.heading, ds.speed,
@@ -266,6 +290,7 @@ export class LocationsService {
       vehicle_id: r.vehicle_id,
       plate: r.plate,
       direction: r.direction,
+      destination: r.destination,
       lng: Number(r.lng),
       lat: Number(r.lat),
       heading: r.heading !== null ? Number(r.heading) : null,

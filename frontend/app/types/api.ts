@@ -26,8 +26,8 @@ export interface Vehicle {
 
 export interface QrTokenResponse {
   token: string
-  exp: number
   vehicle_id: string
+  plate: string
 }
 
 export interface NearbyDriver {
@@ -35,6 +35,7 @@ export interface NearbyDriver {
   vehicle_id: string | null
   plate: string | null
   direction: Direction
+  destination: string | null
   lng: number
   lat: number
   heading?: number | null
@@ -44,6 +45,7 @@ export interface NearbyDriver {
 export interface NearbyPassenger {
   user_id: string
   direction: Direction
+  destination: string | null
   lng: number
   lat: number
 }

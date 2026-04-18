@@ -30,6 +30,9 @@ export class DriverStatus {
   @Column({ type: 'enum', enum: Direction, nullable: true })
   direction!: Direction | null;
 
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  destination!: string | null;
+
   @Index({ spatial: true })
   @Column({
     type: 'geography',

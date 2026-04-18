@@ -10,6 +10,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
+import { v4 as uuidv4 } from 'uuid';
 import { TripStatus } from '../../common/types/direction.enum';
 import { Trip } from '../../entities/trip.entity';
 import { LocationsService, PositionDto } from '../locations/locations.service';
@@ -49,18 +50,27 @@ export class TripsService {
     const payload = await this.qr.validate(dto.qr_token);
     const passengerPos: PositionDto = { lng: dto.lng, lat: dto.lat };
 
+    if (passengerId === payload.did) {
+      throw new BadRequestException('Cannot pickup yourself');
+    }
+
+    // The QR is now permanent (printed in the vehicle), so we can no longer
+    // rely on token rotation for anti-replay. Instead we enforce: the
+    // passenger has no other active trip, AND the scanned driver has no
+    // other active trip (otherwise two passengers could "share" a single
+    // active driver simultaneously).
     const existingActive = await this.trips.findOne({
       where: [
         { passenger_id: passengerId, status: TripStatus.ACTIVE },
         { driver_id: passengerId, status: TripStatus.ACTIVE },
+        { driver_id: payload.did, status: TripStatus.ACTIVE },
       ],
     });
     if (existingActive) {
+      if (existingActive.driver_id === payload.did) {
+        throw new ConflictException('Driver already has an active trip');
+      }
       throw new ConflictException('You already have an active trip');
-    }
-
-    if (passengerId === payload.did) {
-      throw new BadRequestException('Cannot pickup yourself');
     }
 
     const driverPos = await this.locations.getDriverPosition(payload.did);
@@ -76,13 +86,6 @@ export class TripsService {
       );
     }
 
-    const replay = await this.trips.findOne({
-      where: { pickup_token_jti: payload.jti },
-    });
-    if (replay) {
-      throw new ConflictException('QR token already used');
-    }
-
     const trip = await this.trips.save(
       this.trips.create({
         passenger_id: passengerId,
@@ -90,7 +93,9 @@ export class TripsService {
         vehicle_id: payload.vid,
         status: TripStatus.ACTIVE,
         start_point: toPoint(passengerPos),
-        pickup_token_jti: payload.jti,
+        // Per-scan unique id (kept for traceability and to satisfy the
+        // existing UNIQUE INDEX on the column).
+        pickup_token_jti: uuidv4(),
       }),
     );
 
@@ -131,9 +136,17 @@ export class TripsService {
     if (payload.vid !== trip.vehicle_id || payload.did !== trip.driver_id) {
       throw new BadRequestException('QR does not match trip driver/vehicle');
     }
-    if (payload.jti === trip.pickup_token_jti) {
+
+    // The QR is permanent, so a passenger could theoretically scan twice in
+    // a row to settle a 0-meter "fake" trip. Enforce a minimum delay
+    // between pickup and dropoff to defeat that.
+    const minDelayMs =
+      this.config.get<number>('app.dropoffMinDelaySeconds', 30) * 1000;
+    const elapsedMs = Date.now() - new Date(trip.started_at).getTime();
+    if (elapsedMs < minDelayMs) {
+      const wait = Math.ceil((minDelayMs - elapsedMs) / 1000);
       throw new BadRequestException(
-        'Cannot use the same QR token for pickup and dropoff',
+        `Trop tôt pour terminer le trajet (encore ${wait}s)`,
       );
     }
 
@@ -171,7 +184,9 @@ export class TripsService {
     trip.end_point = toPoint(dropoffPos);
     trip.distance_m = distance;
     trip.fare_xpf = settled?.debited ?? fare;
-    trip.dropoff_token_jti = payload.jti;
+    // Per-scan unique id (also satisfies the partial UNIQUE INDEX on the
+    // column).
+    trip.dropoff_token_jti = uuidv4();
     await this.trips.save(trip);
 
     this.bus.emitToUsers([passengerId, trip.driver_id], 'trip:completed', {

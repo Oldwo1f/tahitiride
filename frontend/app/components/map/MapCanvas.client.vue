@@ -1,11 +1,20 @@
 <script setup lang="ts">
-import type { Map as MapboxMap, MapMouseEvent } from 'mapbox-gl'
+import type {
+  GeoJSONSource,
+  Map as MapboxMap,
+  MapMouseEvent,
+  Popup,
+} from 'mapbox-gl'
 import type { FeatureCollection, Point } from 'geojson'
+import { getDestinationLabel } from '~/utils/destinations'
+
+type Mode = 'passenger' | 'driver'
 
 const props = defineProps<{
   centerOn?: { lng: number; lat: number } | null
   selfPosition?: { lng: number; lat: number; heading?: number | null } | null
   pickMode?: boolean
+  mode?: Mode
 }>()
 
 const emit = defineEmits<{
@@ -16,9 +25,40 @@ const drivers = useDriversStore()
 const passengers = usePassengersStore()
 const container = ref<HTMLDivElement | null>(null)
 let map: MapboxMap | null = null
+let popup: Popup | null = null
 let ro: ResizeObserver | null = null
 const ready = ref(false)
 const hasCenteredOnSelf = ref(false)
+
+const TRIANGLE_IMAGE_ID = 'car-triangle'
+const TRIANGLE_SIZE = 64
+
+function buildTriangleIcon(size: number): {
+  width: number
+  height: number
+  data: Uint8ClampedArray
+} {
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('Canvas 2D context unavailable')
+  ctx.clearRect(0, 0, size, size)
+  // Triangle pointing up (north). Vertical alignment leaves margin at top/bottom
+  // so rotation around the icon center keeps it inside the bounds.
+  const margin = size * 0.1
+  ctx.beginPath()
+  ctx.moveTo(size / 2, margin)
+  ctx.lineTo(size - margin, size - margin)
+  ctx.lineTo(margin, size - margin)
+  ctx.closePath()
+  // Solid black fill: when registered with sdf: true, the alpha channel is
+  // re-used as a distance field that can be tinted with `icon-color`.
+  ctx.fillStyle = '#000'
+  ctx.fill()
+  const imageData = ctx.getImageData(0, 0, size, size)
+  return { width: size, height: size, data: imageData.data }
+}
 
 function toDriversGeoJson(): FeatureCollection<
   Point,
@@ -32,6 +72,8 @@ function toDriversGeoJson(): FeatureCollection<
         user_id: d.user_id,
         plate: d.plate,
         direction: d.direction,
+        destination_key: d.destination ?? null,
+        destination_label: getDestinationLabel(d.destination),
         heading: d.heading ?? 0,
       },
       geometry: { type: 'Point', coordinates: [d.lng, d.lat] },
@@ -50,6 +92,8 @@ function toPassengersGeoJson(): FeatureCollection<
       properties: {
         user_id: p.user_id,
         direction: p.direction,
+        destination_key: p.destination ?? null,
+        destination_label: getDestinationLabel(p.destination),
       },
       geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
     })),
@@ -77,10 +121,92 @@ function toSelfGeoJson(): FeatureCollection<Point, Record<string, unknown>> {
 
 function setSource(id: string, data: FeatureCollection<Point>) {
   if (!map || !ready.value) return
-  const src = map.getSource(id)
-  if (src && 'setData' in src) {
-    ;(src as { setData: (d: unknown) => void }).setData(data)
+  const src = map.getSource(id) as GeoJSONSource | undefined
+  if (src && typeof src.setData === 'function') {
+    src.setData(data)
   }
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function buildPopupHtml(params: {
+  title: string
+  subtitle?: string | null
+  destination: string | null
+  direction: string | null
+}): string {
+  const directionLabel =
+    params.direction === 'city'
+      ? 'Ville'
+      : params.direction === 'country'
+        ? 'Campagne'
+        : null
+  const lines: string[] = []
+  lines.push(
+    `<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(params.title)}</div>`,
+  )
+  if (params.subtitle) {
+    lines.push(
+      `<div style="font-size:0.8rem;color:#64748b;margin-bottom:4px;">${escapeHtml(
+        params.subtitle,
+      )}</div>`,
+    )
+  }
+  lines.push(
+    `<div style="font-size:0.85rem;"><strong>Destination :</strong> ${
+      params.destination ? escapeHtml(params.destination) : '<em>non précisée</em>'
+    }</div>`,
+  )
+  if (directionLabel) {
+    lines.push(
+      `<div style="font-size:0.75rem;color:#64748b;margin-top:2px;">Direction : ${escapeHtml(directionLabel)}</div>`,
+    )
+  }
+  return lines.join('')
+}
+
+async function showPopupAt(
+  e: MapMouseEvent & { features?: GeoJSON.Feature[] },
+  kind: 'driver' | 'passenger',
+) {
+  if (!map) return
+  const feature = e.features?.[0]
+  if (!feature || feature.geometry.type !== 'Point') return
+  const props_ = (feature.properties ?? {}) as Record<string, unknown>
+  const coords = feature.geometry.coordinates as [number, number]
+  const destination =
+    typeof props_.destination_label === 'string'
+      ? props_.destination_label
+      : null
+  const direction =
+    typeof props_.direction === 'string' ? props_.direction : null
+
+  const title =
+    kind === 'driver'
+      ? typeof props_.plate === 'string' && props_.plate
+        ? `Voiture ${props_.plate}`
+        : 'Voiture'
+      : 'Passager'
+
+  const html = buildPopupHtml({
+    title,
+    destination,
+    direction,
+  })
+
+  const { $mapbox } = useNuxtApp()
+  if (popup) popup.remove()
+  popup = new $mapbox.Popup({ offset: kind === 'driver' ? 18 : 14, closeButton: true })
+    .setLngLat(coords)
+    .setHTML(html)
+    .addTo(map)
 }
 
 function onClick(e: MapMouseEvent) {
@@ -121,6 +247,12 @@ onMounted(async () => {
 
   map.on('load', () => {
     if (!map) return
+
+    if (!map.hasImage(TRIANGLE_IMAGE_ID)) {
+      const icon = buildTriangleIcon(TRIANGLE_SIZE)
+      map.addImage(TRIANGLE_IMAGE_ID, icon, { sdf: true })
+    }
+
     map.addSource('drivers', { type: 'geojson', data: toDriversGeoJson() })
     map.addSource('passengers', {
       type: 'geojson',
@@ -130,13 +262,21 @@ onMounted(async () => {
 
     map.addLayer({
       id: 'drivers-layer',
-      type: 'circle',
+      type: 'symbol',
       source: 'drivers',
+      layout: {
+        'icon-image': TRIANGLE_IMAGE_ID,
+        'icon-size': 0.55,
+        'icon-rotate': ['coalesce', ['get', 'heading'], 0],
+        'icon-rotation-alignment': 'map',
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'icon-anchor': 'center',
+      },
       paint: {
-        'circle-radius': 10,
-        'circle-color': '#0ea5e9',
-        'circle-stroke-color': '#fff',
-        'circle-stroke-width': 2,
+        'icon-color': '#0ea5e9',
+        'icon-halo-color': '#ffffff',
+        'icon-halo-width': 1.5,
       },
     })
     map.addLayer({
@@ -146,7 +286,8 @@ onMounted(async () => {
       layout: {
         'text-field': ['coalesce', ['get', 'plate'], ''],
         'text-size': 10,
-        'text-offset': [0, 1.2],
+        'text-offset': [0, 1.6],
+        'text-allow-overlap': false,
       },
       paint: {
         'text-halo-color': '#fff',
@@ -168,6 +309,9 @@ onMounted(async () => {
       id: 'self-layer',
       type: 'circle',
       source: 'self',
+      layout: {
+        visibility: props.mode === 'driver' ? 'none' : 'visible',
+      },
       paint: {
         'circle-radius': 12,
         'circle-color': '#22c55e',
@@ -175,6 +319,53 @@ onMounted(async () => {
         'circle-stroke-width': 3,
       },
     })
+    map.addLayer({
+      id: 'self-triangle-layer',
+      type: 'symbol',
+      source: 'self',
+      layout: {
+        visibility: props.mode === 'driver' ? 'visible' : 'none',
+        'icon-image': TRIANGLE_IMAGE_ID,
+        'icon-size': 0.7,
+        'icon-rotate': ['coalesce', ['get', 'heading'], 0],
+        'icon-rotation-alignment': 'map',
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'icon-anchor': 'center',
+      },
+      paint: {
+        'icon-color': '#22c55e',
+        'icon-halo-color': '#ffffff',
+        'icon-halo-width': 2,
+      },
+    })
+
+    const setPointer = () => {
+      if (!map || props.pickMode) return
+      map.getCanvas().style.cursor = 'pointer'
+    }
+    const unsetPointer = () => {
+      if (!map) return
+      map.getCanvas().style.cursor = props.pickMode ? 'crosshair' : ''
+    }
+    map.on('mouseenter', 'drivers-layer', setPointer)
+    map.on('mouseleave', 'drivers-layer', unsetPointer)
+    map.on('mouseenter', 'passengers-layer', setPointer)
+    map.on('mouseleave', 'passengers-layer', unsetPointer)
+
+    map.on('click', 'drivers-layer', (e) => {
+      if (props.pickMode) return
+      // Drivers are only meaningful to passengers (a passenger sees nearby cars).
+      if (props.mode && props.mode !== 'passenger') return
+      void showPopupAt(e, 'driver')
+    })
+    map.on('click', 'passengers-layer', (e) => {
+      if (props.pickMode) return
+      // Passengers are only meaningful to drivers.
+      if (props.mode && props.mode !== 'driver') return
+      void showPopupAt(e, 'passenger')
+    })
+
     ready.value = true
     map.resize()
   })
@@ -211,10 +402,40 @@ watch(
   (v) => {
     if (!map) return
     map.getCanvas().style.cursor = v ? 'crosshair' : ''
+    if (v && popup) {
+      popup.remove()
+      popup = null
+    }
+  },
+)
+
+watch(
+  () => props.mode,
+  (m) => {
+    if (!map || !ready.value) return
+    const isDriver = m === 'driver'
+    if (map.getLayer('self-layer')) {
+      map.setLayoutProperty(
+        'self-layer',
+        'visibility',
+        isDriver ? 'none' : 'visible',
+      )
+    }
+    if (map.getLayer('self-triangle-layer')) {
+      map.setLayoutProperty(
+        'self-triangle-layer',
+        'visibility',
+        isDriver ? 'visible' : 'none',
+      )
+    }
   },
 )
 
 onBeforeUnmount(() => {
+  if (popup) {
+    popup.remove()
+    popup = null
+  }
   ro?.disconnect()
   ro = null
   map?.remove()

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { Direction, Trip, Vehicle } from '~/types/api'
+import { DESTINATION_GROUPS } from '~/utils/destinations'
+import { useUiModeStore, type UiMode } from '~/stores/uiMode'
 
 definePageMeta({
   layout: 'fullscreen',
@@ -14,15 +16,17 @@ const geoStore = useGeoStore()
 const tripStore = useTripStore()
 const driversStore = useDriversStore()
 const passengersStore = usePassengersStore()
+const uiModeStore = useUiModeStore()
 const { suggestDirection } = useDirection()
 
 useLiveGeolocation()
 
-type Mode = 'passenger' | 'driver'
-const mode = ref<Mode>(
-  auth.isDriver && !auth.isPassenger ? 'driver' : 'passenger',
-)
+const mode = computed<UiMode>({
+  get: () => uiModeStore.mode,
+  set: (value) => uiModeStore.setMode(value),
+})
 const direction = ref<Direction>('city')
+const destination = ref<string | null>(null)
 const passengerWaiting = ref(false)
 const driverOnline = ref(false)
 const vehicles = ref<Vehicle[]>([])
@@ -100,6 +104,19 @@ watch(
   },
 )
 
+function ensureDestination(): boolean {
+  if (!destination.value) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Destination requise',
+      detail: 'Choisissez une ville de destination.',
+      life: 3000,
+    })
+    return false
+  }
+  return true
+}
+
 async function togglePassengerWait() {
   if (!effective.value) {
     toast.add({
@@ -115,8 +132,10 @@ async function togglePassengerWait() {
     passengerWaiting.value = false
     driversStore.clear()
   } else {
+    if (!ensureDestination()) return
     socket.emit('passenger:wait', {
       direction: direction.value,
+      destination: destination.value,
       lng: effective.value.lng,
       lat: effective.value.lat,
     })
@@ -154,8 +173,10 @@ async function toggleDriverOnline() {
     driverOnline.value = false
     passengersStore.clear()
   } else {
+    if (!ensureDestination()) return
     socket.emit('driver:online', {
       direction: direction.value,
+      destination: destination.value,
       lng: effective.value.lng,
       lat: effective.value.lat,
       heading: effective.value.heading,
@@ -170,6 +191,7 @@ watch(direction, (d) => {
   if (mode.value === 'driver' && driverOnline.value) {
     socket.emit('driver:online', {
       direction: d,
+      destination: destination.value,
       lng: effective.value.lng,
       lat: effective.value.lat,
       heading: effective.value.heading,
@@ -179,6 +201,29 @@ watch(direction, (d) => {
   if (mode.value === 'passenger' && passengerWaiting.value) {
     socket.emit('passenger:wait', {
       direction: d,
+      destination: destination.value,
+      lng: effective.value.lng,
+      lat: effective.value.lat,
+    })
+  }
+})
+
+watch(destination, (dest) => {
+  if (!effective.value) return
+  if (mode.value === 'driver' && driverOnline.value) {
+    socket.emit('driver:online', {
+      direction: direction.value,
+      destination: dest,
+      lng: effective.value.lng,
+      lat: effective.value.lat,
+      heading: effective.value.heading,
+      speed: effective.value.speed,
+    })
+  }
+  if (mode.value === 'passenger' && passengerWaiting.value) {
+    socket.emit('passenger:wait', {
+      direction: direction.value,
+      destination: dest,
       lng: effective.value.lng,
       lat: effective.value.lat,
     })
@@ -234,6 +279,7 @@ function resyncRealtimeState() {
   if (mode.value === 'driver' && driverOnline.value) {
     socket.emit('driver:online', {
       direction: direction.value,
+      destination: destination.value,
       lng: effective.value.lng,
       lat: effective.value.lat,
       heading: effective.value.heading,
@@ -243,6 +289,7 @@ function resyncRealtimeState() {
   if (mode.value === 'passenger' && passengerWaiting.value) {
     socket.emit('passenger:wait', {
       direction: direction.value,
+      destination: destination.value,
       lng: effective.value.lng,
       lat: effective.value.lat,
     })
@@ -306,6 +353,22 @@ onBeforeUnmount(() => {
           @click="direction = suggestion"
         />
       </div>
+
+      <div class="destination-row">
+        <span class="label">Destination :</span>
+        <Select
+          v-model="destination"
+          :options="DESTINATION_GROUPS"
+          option-group-label="label"
+          option-group-children="items"
+          option-label="label"
+          option-value="value"
+          placeholder="Choisir une ville"
+          size="small"
+          show-clear
+          fluid
+        />
+      </div>
     </div>
 
     <MapCanvas
@@ -316,6 +379,7 @@ onBeforeUnmount(() => {
           : null
       "
       :pick-mode="pickMode"
+      :mode="mode"
       @pick="onMapPick"
     />
 
@@ -349,7 +413,15 @@ onBeforeUnmount(() => {
           size="large"
           @click="toggleDriverOnline"
         />
-        <DriverQrCard v-if="driverOnline" />
+        <Button
+          v-if="driverOnline"
+          label="Afficher mon QR (à scanner par le passager)"
+          icon="pi pi-qrcode"
+          severity="success"
+          fluid
+          size="large"
+          @click="navigateTo('/scan')"
+        />
       </template>
 
       <div class="manual-row">
@@ -421,6 +493,21 @@ onBeforeUnmount(() => {
 .direction-row .label {
   font-size: 0.85rem;
   color: var(--p-text-muted-color);
+}
+.destination-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: nowrap;
+}
+.destination-row .label {
+  font-size: 0.85rem;
+  color: var(--p-text-muted-color);
+  flex-shrink: 0;
+}
+.destination-row :deep(.p-select) {
+  flex: 1;
+  min-width: 0;
 }
 .bottom-panel {
   display: flex;

@@ -10,9 +10,12 @@ export default registerAs('app', () => ({
     process.env.INITIAL_WALLET_BALANCE_XPF || '10000',
     10,
   ),
-  qrRotationSeconds: parseInt(process.env.QR_ROTATION_SECONDS || '60', 10),
   pickupMaxDistanceMeters: parseInt(
     process.env.PICKUP_MAX_DISTANCE_METERS || '50',
+    10,
+  ),
+  dropoffMinDelaySeconds: parseInt(
+    process.env.DROPOFF_MIN_DELAY_SECONDS || '30',
     10,
   ),
   nearbyDriversRadiusMeters: parseInt(

@@ -21,6 +21,7 @@ import { VehiclesService } from '../vehicles/vehicles.service';
 
 interface DriverOnlinePayload {
   direction: Direction;
+  destination?: string | null;
   lng: number;
   lat: number;
   heading?: number | null;
@@ -37,6 +38,7 @@ interface DriverPositionPayload {
 
 interface PassengerWaitPayload {
   direction: Direction;
+  destination?: string | null;
   lng: number;
   lat: number;
 }
@@ -119,6 +121,7 @@ export class RealtimeGateway
       userId,
       vehicleId: vehicle.id,
       direction: data.direction,
+      destination: data.destination ?? null,
       position: { lng: data.lng, lat: data.lat },
       heading: data.heading ?? null,
       speed: data.speed ?? null,
@@ -170,6 +173,7 @@ export class RealtimeGateway
     await this.locations.passengerWait({
       userId,
       direction: data.direction,
+      destination: data.destination ?? null,
       position: { lng: data.lng, lat: data.lat },
     });
     void client.join(`passengers:${data.direction}`);
@@ -239,6 +243,7 @@ export class RealtimeGateway
       vehicle_id: pos.vehicle_id,
       plate: vehicle?.plate ?? null,
       direction: pos.direction,
+      destination: pos.destination,
       lng: pos.lng,
       lat: pos.lat,
     };
@@ -266,6 +271,7 @@ export class RealtimeGateway
     const payload = {
       user_id: passengerUserId,
       direction: pos.direction,
+      destination: pos.destination,
       lng: pos.lng,
       lat: pos.lat,
     };
@@ -337,6 +343,7 @@ export class RealtimeGateway
         vehicle_id: d.vehicle_id,
         plate: d.plate,
         direction: d.direction,
+        destination: d.destination,
         lng: d.lng,
         lat: d.lat,
         heading: d.heading,
@@ -364,6 +371,7 @@ export class RealtimeGateway
       passengers: passengers.map((p) => ({
         user_id: p.user_id,
         direction: p.direction,
+        destination: p.destination,
         lng: p.lng,
         lat: p.lat,
       })),

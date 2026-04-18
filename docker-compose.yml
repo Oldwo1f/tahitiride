@@ -50,8 +50,8 @@ services:
       # CORS allowed origin = the frontend public domain (with https://)
       CORS_ORIGIN: https://${PUBLIC_DOMAIN:?PUBLIC_DOMAIN required in .env}
 
-      QR_ROTATION_SECONDS:           ${QR_ROTATION_SECONDS:-60}
       PICKUP_MAX_DISTANCE_METERS:    ${PICKUP_MAX_DISTANCE_METERS:-50}
+      DROPOFF_MIN_DELAY_SECONDS:     ${DROPOFF_MIN_DELAY_SECONDS:-30}
       NEARBY_DRIVERS_RADIUS_METERS:  ${NEARBY_DRIVERS_RADIUS_METERS:-3000}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
