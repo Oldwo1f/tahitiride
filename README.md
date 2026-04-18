@@ -102,22 +102,34 @@ Voir le [plan détaillé](.cursor/plans/) pour la conception complète.
 10. Tester installabilité PWA : DevTools → Application → Manifest, installer sur mobile Android (menu → « Installer l'application »).
 11. Test offline : désactiver le réseau, naviguer dans l'app shell → les pages s'ouvrent ; les appels API échouent proprement avec un message d'erreur (pas de stale cache).
 
-## Déploiement Docker (serveur de test)
+## Déploiement Docker derrière Traefik
 
-Tout se déploie avec **3 conteneurs** : `db` (PostGIS), `backend` (NestJS) et `frontend` (nginx + PWA statique). Le nginx du frontend fait aussi le **reverse-proxy de `/api/**` et `/socket.io/**` vers le backend** : on n'expose **qu'un seul port** (par défaut `80`) et il n'y a pas de CORS à configurer.
+Architecture cible : **3 conteneurs** (`db`, `backend`, `frontend`) + un Traefik existant qui termine TLS et fait du virtual-hosting via deux sous-domaines :
+
+```
+                         ┌─ tahitiride.aito-flow.com ───── frontend (nginx, PWA statique)
+Browser ──TLS──▶ Traefik ┤
+                         └─ apitahitiride.aito-flow.com ── backend (NestJS, REST + Socket.IO)
+                                                                  │
+                                                          db (PostGIS, interne)
+```
+
+Aucun port n'est publié sur l'hôte par les conteneurs Tahiti Ride : Traefik les joint via le réseau Docker `n8n_default`.
 
 ### Prérequis sur le serveur
 
-- Docker ≥ 24 et le plugin `docker compose` (ou `docker-compose` v2).
-- Un token public Mapbox (`pk.*`) — obligatoire au moment du build.
-- Le port `80` libre (ou choisissez `FRONTEND_PORT` dans `.env`).
+- Docker + plugin `docker compose`.
+- Un Traefik déjà en route avec un certresolver Let's Encrypt et le réseau Docker partagé (sur ce serveur : `n8n_default` + resolver `mytlschallenge`).
+- Les **deux sous-domaines DNS** doivent pointer vers l'IP du serveur **avant** le premier `up` (sinon Traefik ne pourra pas obtenir les certificats Let's Encrypt) :
+  - `tahitiride.aito-flow.com` → IP serveur (record A/AAAA)
+  - `apitahitiride.aito-flow.com` → IP serveur (record A/AAAA)
+- Un token public Mapbox (`pk.*`).
 
 ### 1. Copier le projet
 
 Depuis votre machine locale :
 
 ```bash
-# via rsync (recommandé : exclut node_modules, .nuxt, dist, etc.)
 rsync -avz --delete \
   --exclude 'node_modules' \
   --exclude '.nuxt' \
@@ -125,89 +137,94 @@ rsync -avz --delete \
   --exclude 'dist' \
   --exclude '.git' \
   --exclude '.env' \
-  /var/www/app/ user@mon-serveur:/opt/tahiti-ride/
-
-# ou via git clone si le repo est poussé quelque part
-# ssh user@mon-serveur "git clone <url> /opt/tahiti-ride"
+  /var/www/app/ root@srv960811:/var/www/tahitiride/
 ```
+
+Le `--exclude '.env'` protège votre `.env` existant sur le serveur.
 
 ### 2. Configurer l'environnement
 
-Sur le serveur :
+Sur le serveur, dans `/var/www/tahitiride/` :
 
 ```bash
-cd /opt/tahiti-ride
 cp .env.example .env
 nano .env
 ```
 
-Valeurs **obligatoires** à changer :
+Valeurs **obligatoires** à renseigner :
 
-- `DATABASE_PASSWORD` — mot de passe Postgres.
-- `JWT_SECRET` — secret long aléatoire (générer avec `openssl rand -hex 48`).
-- `NUXT_PUBLIC_MAPBOX_TOKEN` — token Mapbox public (utilisé au build).
-- `MAPBOX_TOKEN` — token Mapbox (utilisé côté backend pour Map Matching; peut être le même).
-- `FRONTEND_PORT` — garder `80` ou passer à `8080` si un autre serveur tourne déjà sur 80.
+| Variable | Valeur |
+|---|---|
+| `PUBLIC_DOMAIN` | `tahitiride.aito-flow.com` |
+| `PUBLIC_API_DOMAIN` | `apitahitiride.aito-flow.com` |
+| `DATABASE_PASSWORD` | mot de passe Postgres (long, aléatoire) |
+| `JWT_SECRET` | secret long (`openssl rand -hex 48`) |
+| `MAPBOX_TOKEN` | votre token Mapbox `pk.*` |
+| `NUXT_PUBLIC_MAPBOX_TOKEN` | **le même token** que `MAPBOX_TOKEN` |
 
-### 3. Lancer
+Variables Traefik (les valeurs par défaut correspondent déjà à votre setup `n8n_default` / `mytlschallenge` / `websecure` — à ne changer que si vous migrez vers une autre stack Traefik).
+
+### 3. Build + run
 
 ```bash
+cd /var/www/tahitiride
 docker compose build
 docker compose up -d
 docker compose ps
-docker compose logs -f backend  # suivre les migrations + boot
+docker compose logs -f backend   # suivre les migrations + boot
 ```
 
-Le backend lance automatiquement les migrations TypeORM au démarrage (dont la création de l'extension PostGIS). Le frontend est servi sur `http://IP_SERVEUR/` (ou `FRONTEND_PORT`).
+Au premier `up`, Traefik va déclencher le challenge ACME et obtenir 2 certificats (un par sous-domaine). Vérifier :
+
+```bash
+docker compose logs -f tahiti_ride_backend  | grep -i listening
+docker logs n8n-traefik-1 2>&1 | grep -iE 'tahitiride|certificate'
+```
 
 ### 4. Vérifier
 
 ```bash
-# Santé du backend (via le proxy nginx → même origine que la PWA)
-curl http://IP_SERVEUR/health
+# Frontend (sert la PWA)
+curl -I https://tahitiride.aito-flow.com
 
-# Logs en direct
-docker compose logs -f
+# Backend (santé)
+curl https://apitahitiride.aito-flow.com/health
+# => {"ok":true,"ts":"..."}
 
-# Accès à la base depuis le conteneur
-docker compose exec db psql -U tahiti -d tahiti_ride -c "\dt"
+# Test API d'inscription
+curl -X POST https://apitahitiride.aito-flow.com/api/auth/signup \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"test@example.com","password":"12345678","role":"passenger"}'
 ```
+
+Ensuite, dans un navigateur : `https://tahitiride.aito-flow.com` → la PWA, installable depuis mobile (HTTPS valide grâce à Let's Encrypt).
 
 ### 5. Mises à jour
 
 ```bash
-cd /opt/tahiti-ride
-git pull   # ou refaire un rsync depuis votre machine
+cd /var/www/tahitiride
+# (ou re-rsync depuis votre machine locale)
+git pull
 docker compose build
 docker compose up -d
 ```
 
-Note : le token `NUXT_PUBLIC_MAPBOX_TOKEN` est **baké dans le bundle statique au build**. Si vous le changez, il faut refaire `docker compose build frontend && docker compose up -d frontend`.
+Note : `NUXT_PUBLIC_MAPBOX_TOKEN`, `PUBLIC_DOMAIN` et `PUBLIC_API_DOMAIN` sont **bakés dans le bundle JS au build**. Si vous changez l'un d'eux, il faut `docker compose build frontend && docker compose up -d frontend`.
 
-### Ports et réseau
+### Architecture réseau
 
-| Service  | Exposé host              | Réseau interne       |
-|----------|--------------------------|----------------------|
-| frontend | `${FRONTEND_PORT}` → 80  | `tahiti_net:80`      |
-| backend  | — (interne uniquement)   | `tahiti_net:3001`    |
-| db       | — (interne uniquement)   | `tahiti_net:5432`    |
+| Service  | Exposé Traefik via                  | Réseau interne tahiti | Réseau Traefik |
+|----------|-------------------------------------|------------------------|----------------|
+| frontend | `tahitiride.aito-flow.com` → :80    | `tahiti_net`           | `n8n_default`  |
+| backend  | `apitahitiride.aito-flow.com` → :3001 | `tahiti_net`         | `n8n_default`  |
+| db       | (jamais exposée)                    | `tahiti_net`           | —              |
 
-Pour exposer le backend ou la DB (debug, client externe), décommenter les sections `ports:` dans `docker-compose.yml`.
-
-### HTTPS (recommandé en vrai test)
-
-Le nginx embarqué parle HTTP. Pour HTTPS, deux options :
-
-1. **Reverse-proxy externe** (Caddy, Traefik, nginx hôte, Cloudflare Tunnel) devant `FRONTEND_PORT`. C'est la plus simple.
-2. Ajouter un Caddy/Traefik dans le `docker-compose.yml` avec ACME automatique. Sans HTTPS, le service worker PWA fonctionne uniquement sur `localhost` — l'installation PWA depuis un mobile nécessite HTTPS.
+Le frontend appelle le backend en cross-origin via `https://apitahitiride.aito-flow.com`. Le CORS est configuré côté backend pour n'accepter que `https://tahitiride.aito-flow.com` (variable `CORS_ORIGIN` injectée automatiquement à partir de `PUBLIC_DOMAIN`). Le Socket.IO réfléchit l'origine (l'authentification JWT garantit la sécurité).
 
 ### Sauvegarde / restauration de la base
 
 ```bash
-# Sauvegarde
 docker compose exec db pg_dump -U tahiti tahiti_ride > backup-$(date +%F).sql
-
-# Restauration
 cat backup.sql | docker compose exec -T db psql -U tahiti tahiti_ride
 ```
 
@@ -217,6 +234,24 @@ cat backup.sql | docker compose exec -T db psql -U tahiti tahiti_ride
 docker compose down -v   # ⚠️ supprime aussi le volume de la DB
 docker compose up -d --build
 ```
+
+### Dépannage
+
+```bash
+# Voir les routers/services connus de Traefik
+curl -s http://localhost:8080/api/http/routers 2>/dev/null | jq '.[] | select(.name|contains("tahitiride"))'
+
+# Logs en temps réel
+docker compose logs -f
+
+# Vérifier que le backend est bien dans le réseau Traefik
+docker network inspect n8n_default | grep -A4 tahiti_ride_backend
+```
+
+Si le certificat Let's Encrypt n'est pas émis :
+- Vérifier que les DNS résolvent bien vers l'IP du serveur (`dig +short tahitiride.aito-flow.com`)
+- Vérifier que Traefik est joignable en HTTPS depuis Internet (pas de firewall qui bloque le challenge ACME)
+- Lire les logs Traefik : `docker logs n8n-traefik-1 2>&1 | grep -iE 'tahitiride|acme|error' | tail -50`
 
 ## Limitations MVP
 
