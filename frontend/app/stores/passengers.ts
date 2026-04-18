@@ -13,6 +13,13 @@ export const usePassengersStore = defineStore('passengers', {
     upsert(p: NearbyPassenger) {
       this.map[p.user_id] = { ...p, updated_at: Date.now() }
     },
+    replaceAll(passengers: NearbyPassenger[]) {
+      const now = Date.now()
+      this.map = {}
+      for (const p of passengers) {
+        this.map[p.user_id] = { ...p, updated_at: now }
+      }
+    },
     remove(userId: string) {
       delete this.map[userId]
     },

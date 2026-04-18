@@ -12,6 +12,8 @@ const api = useApi()
 const toast = useToast()
 const geoStore = useGeoStore()
 const tripStore = useTripStore()
+const driversStore = useDriversStore()
+const passengersStore = usePassengersStore()
 const { suggestDirection } = useDirection()
 
 useLiveGeolocation()
@@ -111,6 +113,7 @@ async function togglePassengerWait() {
   if (passengerWaiting.value) {
     socket.emit('passenger:cancel_wait')
     passengerWaiting.value = false
+    driversStore.clear()
   } else {
     socket.emit('passenger:wait', {
       direction: direction.value,
@@ -149,6 +152,7 @@ async function toggleDriverOnline() {
   if (driverOnline.value) {
     socket.emit('driver:offline')
     driverOnline.value = false
+    passengersStore.clear()
   } else {
     socket.emit('driver:online', {
       direction: direction.value,
@@ -164,12 +168,12 @@ async function toggleDriverOnline() {
 watch(direction, (d) => {
   if (!effective.value) return
   if (mode.value === 'driver' && driverOnline.value) {
-    socket.emit('driver:position', {
+    socket.emit('driver:online', {
+      direction: d,
       lng: effective.value.lng,
       lat: effective.value.lat,
       heading: effective.value.heading,
       speed: effective.value.speed,
-      direction: d,
     })
   }
   if (mode.value === 'passenger' && passengerWaiting.value) {
@@ -190,6 +194,8 @@ watch(mode, () => {
     socket.emit('driver:offline')
     driverOnline.value = false
   }
+  driversStore.clear()
+  passengersStore.clear()
 })
 
 function onMapPick(coords: { lng: number; lat: number }) {
@@ -223,8 +229,33 @@ function clearManualPosition() {
   })
 }
 
+function resyncRealtimeState() {
+  if (!effective.value) return
+  if (mode.value === 'driver' && driverOnline.value) {
+    socket.emit('driver:online', {
+      direction: direction.value,
+      lng: effective.value.lng,
+      lat: effective.value.lat,
+      heading: effective.value.heading,
+      speed: effective.value.speed,
+    })
+  }
+  if (mode.value === 'passenger' && passengerWaiting.value) {
+    socket.emit('passenger:wait', {
+      direction: direction.value,
+      lng: effective.value.lng,
+      lat: effective.value.lat,
+    })
+  }
+}
+
 onMounted(async () => {
   await Promise.all([loadVehicles(), loadActiveTrip()])
+  socket.on('connect', resyncRealtimeState)
+})
+
+onBeforeUnmount(() => {
+  socket.off('connect', resyncRealtimeState)
 })
 </script>
 

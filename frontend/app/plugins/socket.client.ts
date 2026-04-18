@@ -7,6 +7,7 @@ import type {
   DriversSnapshotEvent,
   NearbyDriver,
   NearbyPassenger,
+  PassengersSnapshotEvent,
   TripCompletedEvent,
   TripStartedEvent,
   UserIdEvent,
@@ -41,6 +42,9 @@ export default defineNuxtPlugin(() => {
   )
   socket.on('driver:removed', (d: UserIdEvent) => drivers.remove(d.user_id))
   socket.on('passengers:update', (p: NearbyPassenger) => passengers.upsert(p))
+  socket.on('passengers:snapshot', (p: PassengersSnapshotEvent) =>
+    passengers.replaceAll(p.passengers),
+  )
   socket.on('passenger:removed', (p: UserIdEvent) =>
     passengers.remove(p.user_id),
   )
@@ -49,6 +53,11 @@ export default defineNuxtPlugin(() => {
   })
   socket.on('trip:completed', (e: TripCompletedEvent) => {
     trip.handleCompleted(e)
+  })
+
+  socket.on('disconnect', () => {
+    drivers.clear()
+    passengers.clear()
   })
 
   watch(

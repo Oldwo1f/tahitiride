@@ -125,6 +125,7 @@ export class RealtimeGateway
     });
     void client.join(`drivers:${data.direction}`);
     await this.broadcastDriver(userId);
+    await this.pushNearbyPassengersToDriver(userId);
     return { ok: true };
   }
 
@@ -340,6 +341,31 @@ export class RealtimeGateway
         lat: d.lat,
         heading: d.heading,
         speed: d.speed,
+      })),
+    });
+  }
+
+  private async pushNearbyPassengersToDriver(
+    driverUserId: string,
+  ): Promise<void> {
+    const radius = this.config.get<number>(
+      'app.nearbyDriversRadiusMeters',
+      3000,
+    );
+    const pos = await this.locations.getDriverPosition(driverUserId);
+    if (!pos || !pos.is_online || !pos.direction) return;
+    const passengers = await this.locations.findNearbyWaitingPassengers({
+      direction: pos.direction,
+      lng: pos.lng,
+      lat: pos.lat,
+      radiusMeters: radius,
+    });
+    this.bus.emitToUser(driverUserId, 'passengers:snapshot', {
+      passengers: passengers.map((p) => ({
+        user_id: p.user_id,
+        direction: p.direction,
+        lng: p.lng,
+        lat: p.lat,
       })),
     });
   }

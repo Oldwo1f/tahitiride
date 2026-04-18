@@ -103,6 +103,10 @@ export interface DriversSnapshotEvent {
   drivers: NearbyDriver[]
 }
 
+export interface PassengersSnapshotEvent {
+  passengers: NearbyPassenger[]
+}
+
 export interface UserIdEvent {
   user_id: string
 }
