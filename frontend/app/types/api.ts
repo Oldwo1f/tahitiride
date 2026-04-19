@@ -103,6 +103,16 @@ export interface TripCompletedEvent {
   ended_at: string
 }
 
+/** Emitted by the backend when a passenger taps "I'm getting out". */
+export interface TripDropoffRequestedEvent {
+  trip_id: string
+  passenger_id: string
+  passenger_name: string
+  lng: number
+  lat: number
+  requested_at: string
+}
+
 export interface TripEstimate {
   distance_m: number
   duration_s: number

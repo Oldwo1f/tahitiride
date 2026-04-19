@@ -93,11 +93,88 @@ const direction = computed<Direction>(() => {
 watch(
   () => tripStore.activeTripId,
   (tripId) => {
-    if (tripId) {
+    // Only the passenger gets dragged to the trip page on pickup. Drivers
+    // can carry several passengers, so they stay on the map and manage
+    // their pickups/dropoffs from the dedicated bottom sheet.
+    if (tripId && tripStore.role === 'passenger') {
       passengerWaiting.value = false
       navigateTo(`/trip/${tripId}`)
     }
   },
+)
+
+const confirm = useConfirm()
+const handledDropoffRequests = new Set<string>()
+
+/**
+ * As soon as a passenger requests to step out, surface a confirm dialog
+ * to the driver. Decline simply hides the dialog and keeps the trip
+ * active (the driver can still finish from the bottom sheet); accept
+ * fires the actual dropoff API call.
+ */
+async function completeTripFromRequest(tripId: string) {
+  if (!effective.value) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Position GPS nécessaire',
+      detail: 'Active la localisation pour clôturer le trajet.',
+      life: 4000,
+    })
+    return
+  }
+  try {
+    await api(`/api/trips/${tripId}/complete`, {
+      method: 'POST',
+      body: { lng: effective.value.lng, lat: effective.value.lat },
+    })
+    tripStore.dismissPendingDropoff(tripId)
+    toast.add({
+      severity: 'success',
+      summary: 'Trajet terminé',
+      life: 3000,
+    })
+  } catch (e: unknown) {
+    const data = (e as { data?: { message?: string } })?.data
+    toast.add({
+      severity: 'error',
+      summary: 'Impossible de terminer',
+      detail:
+        data?.message ||
+        (e as { message?: string })?.message ||
+        'Erreur inconnue',
+      life: 4500,
+    })
+  }
+}
+
+watch(
+  () => tripStore.pendingDropoffList,
+  (list) => {
+    if (mode.value !== 'driver') return
+    for (const req of list) {
+      if (handledDropoffRequests.has(req.trip_id)) continue
+      handledDropoffRequests.add(req.trip_id)
+      confirm.require({
+        header: 'Demande de descente',
+        message: `${req.passenger_name} signale qu'il sort du véhicule. Confirmer la fin du trajet ?`,
+        icon: 'pi pi-bell',
+        acceptLabel: 'Confirmer',
+        rejectLabel: 'Pas encore',
+        acceptProps: { severity: 'success' },
+        accept: () => {
+          handledDropoffRequests.delete(req.trip_id)
+          void completeTripFromRequest(req.trip_id)
+        },
+        reject: () => {
+          // Keep the request in the store so the badge stays visible in
+          // the bottom sheet, but allow re-prompting later if a fresh
+          // event comes in.
+          handledDropoffRequests.delete(req.trip_id)
+        },
+      })
+    }
+  },
+  { deep: true },
 )
 
 watch(
@@ -499,6 +576,8 @@ onBeforeUnmount(() => {
       :mode="mode"
       @pick="onMapPick"
     />
+
+    <DriverActiveTripsSheet v-if="mode === 'driver'" />
 
     <div class="bottom-panel">
       <template v-if="mode === 'passenger'">

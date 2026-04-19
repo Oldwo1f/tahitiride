@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { TripStatus } from '../../common/types/direction.enum';
 import { Trip } from '../../entities/trip.entity';
@@ -23,7 +23,7 @@ import type {
   EstimateDto,
   EstimateResponseDto,
 } from './dto/estimate.dto';
-import type { DropoffDto, PickupDto } from './dto/pickup.dto';
+import type { DropoffPositionDto, PickupDto } from './dto/pickup.dto';
 import type { TripSummaryDto } from './dto/trip-summary.dto';
 
 const toPoint = (p: PositionDto): Point => ({
@@ -44,7 +44,6 @@ export class TripsService {
     private readonly wallet: WalletService,
     private readonly bus: RealtimeBus,
     private readonly config: ConfigService,
-    private readonly ds: DataSource,
   ) {}
 
   async pickup(passengerId: string, dto: PickupDto): Promise<Trip> {
@@ -59,22 +58,20 @@ export class TripsService {
       throw new BadRequestException('Cannot pickup yourself');
     }
 
-    // The QR is now permanent (printed in the vehicle), so we can no longer
-    // rely on token rotation for anti-replay. Instead we enforce: the
-    // passenger has no other active trip, AND the scanned driver has no
-    // other active trip (otherwise two passengers could "share" a single
-    // active driver simultaneously).
+    // The QR is permanent (printed in the vehicle). A driver can have
+    // several passengers on board at the same time (carpooling), so the
+    // only hard constraints we enforce here are:
+    //   - the scanning passenger isn't already in another active trip,
+    //   - the scanning user isn't currently driving someone else (so a
+    //     driver can't board a competitor's vehicle while they have
+    //     passengers on board themselves).
     const existingActive = await this.trips.findOne({
       where: [
         { passenger_id: passengerId, status: TripStatus.ACTIVE },
         { driver_id: passengerId, status: TripStatus.ACTIVE },
-        { driver_id: payload.did, status: TripStatus.ACTIVE },
       ],
     });
     if (existingActive) {
-      if (existingActive.driver_id === payload.did) {
-        throw new ConflictException('Driver already has an active trip');
-      }
       throw new ConflictException('You already have an active trip');
     }
 
@@ -123,28 +120,13 @@ export class TripsService {
     return trip;
   }
 
-  async dropoff(
-    passengerId: string,
-    tripId: string,
-    dto: DropoffDto,
-  ): Promise<Trip> {
-    const trip = await this.trips.findOne({ where: { id: tripId } });
-    if (!trip) throw new NotFoundException('Trip not found');
-    if (trip.passenger_id !== passengerId) {
-      throw new ForbiddenException();
-    }
-    if (trip.status !== TripStatus.ACTIVE) {
-      throw new BadRequestException('Trip is not active');
-    }
-
-    const payload = await this.qr.validate(dto.qr_token);
-    if (payload.vid !== trip.vehicle_id || payload.did !== trip.driver_id) {
-      throw new BadRequestException('QR does not match trip driver/vehicle');
-    }
-
-    // The QR is permanent, so a passenger could theoretically scan twice in
-    // a row to settle a 0-meter "fake" trip. Enforce a minimum delay
-    // between pickup and dropoff to defeat that.
+  /**
+   * Reject the request when a trip just started: protects against a
+   * passenger scanning the QR and immediately ending the trip to settle a
+   * 0-meter fake ride. Used both by passenger-initiated dropoff requests
+   * and by driver-initiated trip completion.
+   */
+  private ensureMinDuration(trip: Trip): void {
     const minDelayMs =
       this.config.get<number>('app.dropoffMinDelaySeconds', 30) * 1000;
     const elapsedMs = Date.now() - new Date(trip.started_at).getTime();
@@ -154,8 +136,89 @@ export class TripsService {
         `Trop tôt pour terminer le trajet (encore ${wait}s)`,
       );
     }
+  }
 
-    const dropoffPos: PositionDto = { lng: dto.lng, lat: dto.lat };
+  /**
+   * Passenger taps "I'm getting out": we don't end the trip yet — instead
+   * we notify the driver so they can confirm. The trip stays active until
+   * the driver calls {@link completeByDriver}.
+   */
+  async requestDropoff(
+    passengerId: string,
+    tripId: string,
+    dto: DropoffPositionDto,
+  ): Promise<{ ok: true }> {
+    const trip = await this.trips.findOne({
+      where: { id: tripId },
+      relations: { passenger: true },
+    });
+    if (!trip) throw new NotFoundException('Trip not found');
+    if (trip.passenger_id !== passengerId) {
+      throw new ForbiddenException();
+    }
+    if (trip.status !== TripStatus.ACTIVE) {
+      throw new BadRequestException('Trip is not active');
+    }
+
+    this.ensureMinDuration(trip);
+
+    // Record the passenger's current position so the eventual route used
+    // for billing reflects where they actually asked to step out, not
+    // where the driver finally tapped "confirm".
+    const pos: PositionDto = { lng: dto.lng, lat: dto.lat };
+    const seq = await this.locations.countTripPoints(tripId);
+    await this.locations.recordTripPoint({ tripId, seq, position: pos });
+
+    this.bus.emitToUsers(
+      [trip.driver_id, passengerId],
+      'trip:dropoff_requested',
+      {
+        trip_id: trip.id,
+        passenger_id: passengerId,
+        passenger_name: trip.passenger?.full_name ?? 'Passager',
+        lng: pos.lng,
+        lat: pos.lat,
+        requested_at: new Date().toISOString(),
+      },
+    );
+
+    return { ok: true };
+  }
+
+  /**
+   * Driver confirms (or proactively decides) that a passenger is leaving
+   * the vehicle. This is the only way to settle a trip — the passenger
+   * never scans a QR at dropoff anymore.
+   */
+  async completeByDriver(
+    driverId: string,
+    tripId: string,
+    dto: DropoffPositionDto,
+  ): Promise<Trip> {
+    const trip = await this.trips.findOne({ where: { id: tripId } });
+    if (!trip) throw new NotFoundException('Trip not found');
+    if (trip.driver_id !== driverId) {
+      throw new ForbiddenException();
+    }
+    if (trip.status !== TripStatus.ACTIVE) {
+      throw new BadRequestException('Trip is not active');
+    }
+
+    this.ensureMinDuration(trip);
+
+    return this.finalizeTrip(trip, { lng: dto.lng, lat: dto.lat });
+  }
+
+  /**
+   * Shared logic to close out an active trip: persist the final point,
+   * compute distance/fare, settle the wallet, mark the trip as completed,
+   * and broadcast the result.
+   */
+  private async finalizeTrip(
+    trip: Trip,
+    dropoffPos: PositionDto,
+  ): Promise<Trip> {
+    const tripId = trip.id;
 
     const nextSeq = await this.locations.countTripPoints(tripId);
     await this.locations.recordTripPoint({
@@ -178,7 +241,7 @@ export class TripsService {
     try {
       settled = await this.wallet.settleTrip({
         tripId,
-        passengerId,
+        passengerId: trip.passenger_id,
         driverId: trip.driver_id,
         fareXpf: fare,
         driverShareXpf: driverShare,
@@ -197,17 +260,22 @@ export class TripsService {
     trip.distance_m = distance;
     trip.fare_xpf = settled?.debited ?? fare;
     trip.driver_share_xpf = settled?.driverCredited ?? driverShare;
-    // Per-scan unique id (also satisfies the partial UNIQUE INDEX on the
-    // column).
+    // Stamp a synthetic uuid so the partial UNIQUE INDEX on
+    // `dropoff_token_jti` (a hold-over from the QR-scan era) keeps being
+    // satisfied even though we no longer scan anything.
     trip.dropoff_token_jti = uuidv4();
     await this.trips.save(trip);
 
-    this.bus.emitToUsers([passengerId, trip.driver_id], 'trip:completed', {
-      trip_id: trip.id,
-      distance_m: trip.distance_m,
-      fare_xpf: trip.fare_xpf,
-      ended_at: trip.ended_at,
-    });
+    this.bus.emitToUsers(
+      [trip.passenger_id, trip.driver_id],
+      'trip:completed',
+      {
+        trip_id: trip.id,
+        distance_m: trip.distance_m,
+        fare_xpf: trip.fare_xpf,
+        ended_at: trip.ended_at,
+      },
+    );
 
     return trip;
   }
@@ -262,6 +330,20 @@ export class TripsService {
     };
   }
 
+  /**
+   * Active trips (status = ACTIVE) where this user is the driver. With the
+   * new flow a driver can carry several passengers at once, so this is
+   * the canonical "passengers currently on board" list.
+   */
+  async listActiveAsDriver(driverId: string): Promise<TripSummaryDto[]> {
+    const trips = await this.trips.find({
+      where: { driver_id: driverId, status: TripStatus.ACTIVE },
+      relations: { passenger: true, driver: true, vehicle: true },
+      order: { started_at: 'ASC' },
+    });
+    return trips.map<TripSummaryDto>((t) => this.toSummary(t, driverId));
+  }
+
   async listMine(userId: string, limit = 20): Promise<TripSummaryDto[]> {
     const trips = await this.trips.find({
       where: [{ passenger_id: userId }, { driver_id: userId }],
@@ -269,29 +351,31 @@ export class TripsService {
       order: { started_at: 'DESC' },
       take: Math.min(limit, 100),
     });
+    return trips.map<TripSummaryDto>((t) => this.toSummary(t, userId));
+  }
 
-    return trips.map<TripSummaryDto>((t) => {
-      const myRole: 'passenger' | 'driver' =
-        t.passenger_id === userId ? 'passenger' : 'driver';
-      const partner = myRole === 'passenger' ? t.driver : t.passenger;
-      return {
-        id: t.id,
-        passenger_id: t.passenger_id,
-        driver_id: t.driver_id,
-        vehicle_id: t.vehicle_id,
-        status: t.status,
-        started_at: t.started_at,
-        ended_at: t.ended_at,
-        distance_m: t.distance_m,
-        fare_xpf: t.fare_xpf,
-        driver_share_xpf: t.driver_share_xpf,
-        my_role: myRole,
-        partner_id: partner?.id ?? (myRole === 'passenger' ? t.driver_id : t.passenger_id),
-        partner_name: partner?.full_name ?? 'Inconnu',
-        vehicle_plate: t.vehicle?.plate ?? null,
-        vehicle_model: t.vehicle?.model ?? null,
-        vehicle_color: t.vehicle?.color ?? null,
-      };
-    });
+  private toSummary(t: Trip, userId: string): TripSummaryDto {
+    const myRole: 'passenger' | 'driver' =
+      t.passenger_id === userId ? 'passenger' : 'driver';
+    const partner = myRole === 'passenger' ? t.driver : t.passenger;
+    return {
+      id: t.id,
+      passenger_id: t.passenger_id,
+      driver_id: t.driver_id,
+      vehicle_id: t.vehicle_id,
+      status: t.status,
+      started_at: t.started_at,
+      ended_at: t.ended_at,
+      distance_m: t.distance_m,
+      fare_xpf: t.fare_xpf,
+      driver_share_xpf: t.driver_share_xpf,
+      my_role: myRole,
+      partner_id:
+        partner?.id ?? (myRole === 'passenger' ? t.driver_id : t.passenger_id),
+      partner_name: partner?.full_name ?? 'Inconnu',
+      vehicle_plate: t.vehicle?.plate ?? null,
+      vehicle_model: t.vehicle?.model ?? null,
+      vehicle_color: t.vehicle?.color ?? null,
+    };
   }
 }

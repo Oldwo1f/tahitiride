@@ -15,10 +15,13 @@ export class PickupDto {
   lat!: number;
 }
 
-export class DropoffDto {
-  @IsString()
-  qr_token!: string;
-
+/**
+ * Sent by the passenger asking to step out of the vehicle, and by the
+ * driver when they confirm/decide a passenger has left. We just need the
+ * current GPS fix; the QR is no longer scanned at dropoff (the QR is now
+ * only used to start the trip).
+ */
+export class DropoffPositionDto {
   @IsNumber()
   @Min(-180)
   @Max(180)

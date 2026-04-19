@@ -9,6 +9,7 @@ import type {
   NearbyPassenger,
   PassengersSnapshotEvent,
   TripCompletedEvent,
+  TripDropoffRequestedEvent,
   TripStartedEvent,
   UserIdEvent,
 } from '~/types/api'
@@ -53,6 +54,9 @@ export default defineNuxtPlugin(() => {
   })
   socket.on('trip:completed', (e: TripCompletedEvent) => {
     trip.handleCompleted(e)
+  })
+  socket.on('trip:dropoff_requested', (e: TripDropoffRequestedEvent) => {
+    trip.handleDropoffRequested(e, auth.user?.id ?? null)
   })
 
   socket.on('disconnect', () => {

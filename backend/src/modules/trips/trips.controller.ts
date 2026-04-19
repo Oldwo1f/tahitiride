@@ -12,7 +12,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { EstimateDto } from './dto/estimate.dto';
-import { DropoffDto, PickupDto } from './dto/pickup.dto';
+import { DropoffPositionDto, PickupDto } from './dto/pickup.dto';
 import { TripsService } from './trips.service';
 
 @Controller('trips')
@@ -30,18 +30,35 @@ export class TripsController {
     return this.trips.pickup(user.id, dto);
   }
 
-  @Post(':id/dropoff')
-  dropoff(
+  /** Passenger asks to step out — driver still has to confirm. */
+  @Post(':id/dropoff-request')
+  requestDropoff(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: DropoffDto,
+    @Body() dto: DropoffPositionDto,
   ) {
-    return this.trips.dropoff(user.id, id, dto);
+    return this.trips.requestDropoff(user.id, id, dto);
+  }
+
+  /** Driver confirms (or initiates) the end of a trip. */
+  @Post(':id/complete')
+  complete(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: DropoffPositionDto,
+  ) {
+    return this.trips.completeByDriver(user.id, id, dto);
   }
 
   @Get('active')
   active(@CurrentUser() user: AuthUser) {
     return this.trips.findActive(user.id);
+  }
+
+  /** All passengers currently riding with this driver. */
+  @Get('active-passengers')
+  activePassengers(@CurrentUser() user: AuthUser) {
+    return this.trips.listActiveAsDriver(user.id);
   }
 
   @Get('mine')
