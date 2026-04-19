@@ -34,6 +34,36 @@ export interface Vehicle {
   is_certified?: boolean
   /** ISO date `YYYY-MM-DD` or null. Reflects the latest approved insurance vignette. */
   certified_until?: string | null
+  /** Internal storage path (`vehicles/<file>`); rarely needed by the UI. */
+  photo_path?: string | null
+  /** Auth-protected URL `/api/uploads/vehicles/<file>` or `null`. */
+  photo_url?: string | null
+}
+
+/**
+ * Result of `POST /api/vehicles/photo/analyze`. Used by the driver
+ * onboarding wizard to pre-fill the vehicle creation form.
+ */
+export interface OcrVehicleExtraction {
+  make: string | null
+  model: string | null
+  color: string | null
+  plate: string | null
+  /** 0..1 confidence reported by the OCR backend. */
+  confidence: number | null
+  /** Human-readable note when confidence is low (or null). */
+  decision_notes: string | null
+}
+
+/**
+ * Response of `POST /api/vehicles/mine`. `user_promoted` is true when the
+ * call auto-promoted the caller from `passenger` to `both` so the
+ * frontend can refresh its auth store.
+ */
+export interface CreateVehicleResponse {
+  vehicle: Vehicle
+  user_promoted: boolean
+  user_role: UserRole
 }
 
 export type CertificationType = 'license' | 'insurance'

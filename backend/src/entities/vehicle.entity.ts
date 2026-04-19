@@ -37,6 +37,16 @@ export class Vehicle {
   qr_secret!: string;
 
   /**
+   * Relative path under the upload root (e.g. `vehicles/<uuid>.jpg`) of
+   * the 3/4-face photo captured during the driver onboarding wizard.
+   * Served by `GET /api/uploads/vehicles/<filename>` (any authenticated
+   * user — passengers need to recognise the car arriving). Nullable so
+   * legacy creation paths and seeded fixtures keep working.
+   */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  photo_path!: string | null;
+
+  /**
    * Denormalised cache of the latest approved insurance certification
    * status, kept in sync by `CertificationsService` and the daily cron
    * that flips expired vignettes back to `false`.

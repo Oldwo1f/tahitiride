@@ -38,16 +38,15 @@ const workKey = computed<string | null>({
 
 const vehicles = ref<Vehicle[]>([])
 const loadingVehicles = ref(true)
-const addOpen = ref(false)
-const form = reactive({ plate: '', model: '', color: '' })
-const adding = ref(false)
-const addError = ref<string | null>(null)
 
 const certs = ref<MyCertifications | null>(null)
 const loadingCerts = ref(true)
 const uploadOpen = ref(false)
 const uploadType = ref<CertificationType>('license')
 const uploadVehicleId = ref<string | null>(null)
+
+const driverWizardOpen = ref(false)
+const addVehicleWizardOpen = ref(false)
 
 const editingProfile = ref(false)
 const profileForm = reactive({
@@ -87,34 +86,12 @@ async function loadCertifications() {
   }
 }
 
-async function addVehicle() {
-  if (!form.plate || !form.model || !form.color) return
-  adding.value = true
-  addError.value = null
-  try {
-    const v = await api<Vehicle>('/api/vehicles/mine', {
-      method: 'POST',
-      body: { plate: form.plate, model: form.model, color: form.color },
-    })
-    vehicles.value = [...vehicles.value, v]
-    form.plate = ''
-    form.model = ''
-    form.color = ''
-    addOpen.value = false
-    await loadCertifications()
-    toast.add({
-      severity: 'success',
-      summary: 'Véhicule ajouté',
-      life: 2500,
-    })
-  } catch (e: unknown) {
-    const data = (e as { data?: { message?: string | string[] } })?.data
-    addError.value =
-      (Array.isArray(data?.message) ? data.message.join(', ') : data?.message) ||
-      'Erreur'
-  } finally {
-    adding.value = false
-  }
+async function onDriverWizardFinished() {
+  await Promise.all([loadVehicles(), loadCertifications()])
+}
+
+async function onAddVehicleFinished() {
+  await Promise.all([loadVehicles(), loadCertifications()])
 }
 
 function askDelete(v: Vehicle) {
@@ -369,6 +346,32 @@ onMounted(() => {
       </template>
     </Card>
 
+    <Card
+      v-if="!auth.isDriver && !auth.isAdmin"
+      class="become-driver-card"
+    >
+      <template #title>
+        <div class="title-row">
+          <span><i class="pi pi-car" /> Devenir conducteur</span>
+        </div>
+      </template>
+      <template #content>
+        <p class="tr-subtle become-driver-hint">
+          Mettez votre véhicule à disposition d'autres utilisateurs en
+          quelques minutes. Préparez votre permis et la vignette
+          d'assurance — la marque, le modèle et la plaque seront détectés
+          automatiquement à partir d'une photo.
+        </p>
+        <Button
+          label="Commencer"
+          icon="pi pi-arrow-right"
+          icon-pos="right"
+          fluid
+          @click="driverWizardOpen = true"
+        />
+      </template>
+    </Card>
+
     <Card v-if="auth.isDriver">
       <template #title>
         <div class="title-row">
@@ -476,7 +479,7 @@ onMounted(() => {
             icon="pi pi-plus"
             label="Ajouter"
             size="small"
-            @click="addOpen = true"
+            @click="addVehicleWizardOpen = true"
           />
         </div>
       </template>
@@ -493,6 +496,16 @@ onMounted(() => {
             :key="v.id"
             class="vehicle-card"
           >
+            <div class="vehicle-photo">
+              <img
+                v-if="v.photo_url"
+                :src="v.photo_url"
+                :alt="`Véhicule ${v.plate}`"
+              >
+              <div v-else class="vehicle-photo-fallback">
+                <i class="pi pi-car" />
+              </div>
+            </div>
             <div class="vehicle-info">
               <div class="vehicle-plate">{{ v.plate }}</div>
               <div class="tr-subtle vehicle-meta">
@@ -572,37 +585,15 @@ onMounted(() => {
       @click="logout"
     />
 
-    <Dialog
-      v-model:visible="addOpen"
-      header="Nouveau véhicule"
-      modal
-      :style="{ width: '90vw', maxWidth: '400px' }"
-    >
-      <form @submit.prevent="addVehicle" class="veh-form">
-        <div class="field">
-          <label for="pl">Plaque</label>
-          <InputText id="pl" v-model="form.plate" required maxlength="16" />
-        </div>
-        <div class="field">
-          <label for="md">Modèle</label>
-          <InputText id="md" v-model="form.model" required maxlength="80" />
-        </div>
-        <div class="field">
-          <label for="cl">Couleur</label>
-          <InputText id="cl" v-model="form.color" required maxlength="40" />
-        </div>
-        <div v-if="addError" class="tr-error">{{ addError }}</div>
-        <div class="row-end">
-          <Button
-            type="button"
-            label="Annuler"
-            text
-            @click="addOpen = false"
-          />
-          <Button type="submit" label="Ajouter" :loading="adding" />
-        </div>
-      </form>
-    </Dialog>
+    <DriverOnboardingWizard
+      v-model:visible="driverWizardOpen"
+      @finished="onDriverWizardFinished"
+    />
+
+    <AddVehicleWizard
+      v-model:visible="addVehicleWizardOpen"
+      @finished="onAddVehicleFinished"
+    />
 
     <Dialog
       v-model:visible="editingProfile"
@@ -779,7 +770,6 @@ onMounted(() => {
 .vehicle-card {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 0.75rem;
   padding: 0.75rem;
   border: 1px solid var(--p-surface-200);
@@ -790,11 +780,35 @@ onMounted(() => {
   border-color: var(--p-surface-700);
   background: var(--p-surface-900);
 }
+.vehicle-photo {
+  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--p-surface-100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.p-dark .vehicle-photo {
+  background: var(--p-surface-800);
+}
+.vehicle-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.vehicle-photo-fallback {
+  color: var(--p-text-muted-color);
+  font-size: 1.5rem;
+}
 .vehicle-info {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
   min-width: 0;
+  flex: 1;
 }
 .vehicle-plate {
   font-weight: 700;
@@ -823,6 +837,13 @@ onMounted(() => {
   align-items: center;
   gap: 0.25rem;
   flex-shrink: 0;
+}
+.become-driver-card :deep(.p-card-title) {
+  color: var(--p-primary-color);
+}
+.become-driver-hint {
+  margin: 0 0 0.85rem;
+  font-size: 0.9rem;
 }
 .admin-icon {
   color: var(--p-amber-500);

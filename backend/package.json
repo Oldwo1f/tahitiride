@@ -23,7 +23,9 @@
     "migration:revert": "pnpm typeorm migration:revert",
     "migration:generate": "pnpm typeorm migration:generate src/database/migrations/Auto",
     "admin:create": "ts-node -r tsconfig-paths/register src/scripts/create-admin.ts",
-    "admin:create:prod": "node dist/scripts/create-admin.js"
+    "admin:create:prod": "node dist/scripts/create-admin.js",
+    "clean:test-data": "ts-node -r tsconfig-paths/register src/scripts/clean-test-data.ts",
+    "clean:test-data:prod": "node dist/scripts/clean-test-data.js"
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.1",

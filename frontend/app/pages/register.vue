@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AuthResponse, UserRole } from '~/types/api'
+import type { AuthResponse } from '~/types/api'
 
 definePageMeta({
   layout: 'auth',
@@ -11,18 +11,27 @@ const last_name = ref('')
 const email = ref('')
 const password = ref('')
 const phone = ref('')
-const role = ref<UserRole>('both')
 const loading = ref(false)
 const error = ref<string | null>(null)
 const auth = useAuthStore()
 const api = useApi()
 const toast = useToast()
 
-const roleOptions = [
-  { label: 'Passager & conducteur', value: 'both' },
-  { label: 'Passager uniquement', value: 'passenger' },
-  { label: 'Conducteur uniquement', value: 'driver' },
-]
+/**
+ * Shared post-signup handler used by both the email/password form and
+ * the Facebook button. Lands on /map regardless of role: drivers will
+ * be auto-promoted by the onboarding wizard the first time they add a
+ * vehicle from /profile.
+ */
+async function onAuthSuccess(res: AuthResponse) {
+  toast.add({
+    severity: 'success',
+    summary: 'Compte créé',
+    detail: `Bienvenue ${res.user.full_name}. + 10 000 XPF de démo crédités.`,
+    life: 4500,
+  })
+  await navigateTo('/map')
+}
 
 async function submit() {
   if (
@@ -43,17 +52,10 @@ async function submit() {
         email: email.value,
         password: password.value,
         phone: phone.value || undefined,
-        role: role.value,
       },
     })
     auth.setAuth(res)
-    toast.add({
-      severity: 'success',
-      summary: 'Compte créé',
-      detail: `+ 10 000 XPF de démo crédités`,
-      life: 3500,
-    })
-    await navigateTo('/map')
+    await onAuthSuccess(res)
   } catch (e: unknown) {
     const data = (e as { data?: { message?: string | string[] } })?.data
     const msg =
@@ -129,17 +131,19 @@ async function submit() {
               fluid
             />
           </div>
-          <div class="field">
-            <label>Rôle</label>
-            <Select
-              v-model="role"
-              :options="roleOptions"
-              option-label="label"
-              option-value="value"
-            />
-          </div>
+          <Message severity="info" :closable="false" class="role-hint">
+            Vous serez inscrit en tant que passager. Vous pourrez devenir
+            conducteur depuis votre profil.
+          </Message>
           <div v-if="error" class="tr-error">{{ error }}</div>
           <Button type="submit" label="Créer le compte" :loading="loading" fluid />
+          <Divider align="center" type="solid" class="auth-divider">
+            <span class="tr-subtle">OU</span>
+          </Divider>
+          <FacebookLoginButton
+            @success="onAuthSuccess"
+            @error="(msg) => (error = msg)"
+          />
           <div class="tr-subtle" style="text-align: center;">
             Déjà inscrit ?
             <NuxtLink to="/login">Connexion</NuxtLink>
@@ -182,5 +186,11 @@ async function submit() {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
+}
+.role-hint {
+  font-size: 0.85rem;
+}
+.auth-divider {
+  margin: 0.25rem 0;
 }
 </style>

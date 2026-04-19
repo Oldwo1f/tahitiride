@@ -5,6 +5,7 @@ import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
+import facebookConfig from './config/facebook.config';
 import jwtConfig from './config/jwt.config';
 import mapboxConfig from './config/mapbox.config';
 import { AdminModule } from './modules/admin/admin.module';
@@ -28,7 +29,13 @@ import { WalletRequestsModule } from './modules/wallet-requests/wallet-requests.
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, databaseConfig, jwtConfig, mapboxConfig],
+      load: [
+        appConfig,
+        databaseConfig,
+        jwtConfig,
+        mapboxConfig,
+        facebookConfig,
+      ],
     }),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],

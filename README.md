@@ -90,8 +90,8 @@ Voir le [plan détaillé](.cursor/plans/) pour la conception complète.
 
 1. Démarrer la DB (Docker ou PostgreSQL local avec PostGIS), `backend` (port 3001) et `frontend` (port 3000).
 2. Ouvrir deux onglets/téléphones :
-   - **A** : créer un compte `role = passenger` (mail perso1, mdp 12345678).
-   - **B** : créer un compte `role = driver`, ajouter un véhicule dans `/profile` (plaque, modèle, couleur).
+   - **A** : créer un compte (mail perso1, mdp 12345678). Tous les nouveaux comptes sont créés en `role = passenger`.
+   - **B** : créer un compte, puis sur `/profile` cliquer « Devenir conducteur » → wizard 3 étapes (photo permis → photo véhicule 3/4 face → photo vignette d'assurance). À la création du 1ᵉʳ véhicule, le rôle bascule automatiquement en `both` (passager + conducteur). Pour ajouter un véhicule supplémentaire ensuite, le bouton « Ajouter un véhicule » lance un wizard 2 étapes (photo véhicule + vignette).
 3. **Sur A (passager)** : aller sur `/map`, autoriser la géolocalisation, choisir une direction (ville/campagne), cliquer « Je suis en attente ».
 4. **Sur B (conducteur)** : aller sur `/map`, même direction, cliquer « Je passe en ligne ». Un QR code rotatif s'affiche en bas.
 5. Vérifier que les deux comptes se voient mutuellement sur la carte (un point rouge sur A, un point bleu sur B) si les positions sont à moins de 3 km.
@@ -139,6 +139,29 @@ docker compose exec backend node dist/scripts/create-admin.js \
 ```
 
 Le script désactive temporairement le bootstrap par env-var pendant son exécution pour éviter les conflits.
+
+### Reset des données de test (`clean:test-data`)
+
+Pendant la phase de test, pour repartir d'un état propre avant d'expérimenter le wizard d'onboarding conducteur :
+
+```bash
+# en dev (dry-run par défaut, affiche les volumes qui seraient supprimés)
+cd backend
+pnpm run clean:test-data
+
+# en dev (effectif)
+pnpm run clean:test-data -- --confirm
+
+# en prod / docker
+docker compose exec backend node dist/scripts/clean-test-data.js --confirm
+```
+
+Le script (transactionnel) effectue :
+
+- `TRUNCATE trip_points, trips, certifications, vehicles RESTART IDENTITY CASCADE`
+- `UPDATE users SET role='passenger' WHERE role IN ('driver','both')`
+
+Les comptes admin et leurs wallets sont conservés. **À ne jamais lancer en production avec des données réelles.**
 
 ### Se connecter
 
@@ -400,6 +423,41 @@ Si le certificat Let's Encrypt n'est pas émis :
 - Vérifier que les DNS résolvent bien vers l'IP du serveur (`dig +short tahitiride.aito-flow.com`)
 - Vérifier que Traefik est joignable en HTTPS depuis Internet (pas de firewall qui bloque le challenge ACME)
 - Lire les logs Traefik : `docker logs n8n-traefik-1 2>&1 | grep -iE 'tahitiride|acme|error' | tail -50`
+
+## Connexion Facebook (optionnelle)
+
+L'app supporte un bouton « Continuer avec Facebook » sur les pages `/login` et `/register`. Le flux est entièrement côté client (SDK JS Facebook, popup OAuth) puis l'access_token est vérifié côté serveur via la Graph API avant d'émettre le JWT habituel.
+
+Le bouton se cache automatiquement si `NUXT_PUBLIC_FACEBOOK_APP_ID` est vide — donc l'app fonctionne sans aucune configuration Facebook.
+
+### Configurer une app Facebook (5 minutes)
+
+1. Aller sur https://developers.facebook.com/apps/, créer une app de type **Consumer**.
+2. Dans le menu gauche, ajouter le produit **Facebook Login → Web** (renseigner l'URL du site, ex. `http://localhost:3000` en dev, `https://tahitiride.aito-flow.com` en prod).
+3. Dans **App Settings → Basic**, ajouter les domaines dans **App Domains** : `localhost` (dev) puis votre domaine de prod.
+4. Récupérer l'**App ID** et l'**App Secret** dans **App Settings → Basic**.
+5. Renseigner les variables :
+
+| Côté | Variable | Valeur |
+|---|---|---|
+| Backend | `FACEBOOK_APP_ID` | App ID |
+| Backend | `FACEBOOK_APP_SECRET` | App Secret (ne JAMAIS exposer côté client) |
+| Backend | `FACEBOOK_GRAPH_VERSION` | `v20.0` (par défaut) |
+| Frontend | `NUXT_PUBLIC_FACEBOOK_APP_ID` | **Le même** App ID |
+
+En Docker, les 4 vivent dans le `.env` racine. En dev local, mettre les 3 backend dans `backend/.env` et le frontend dans `frontend/.env`.
+
+### Comportement
+
+- **Compte existant avec le même email** : auto-link silencieux (le `facebook_id` est rattaché au compte existant). Facebook ayant déjà vérifié l'email, ce flow est sûr et évite la friction d'un mot de passe oublié.
+- **Nouveau compte** : créé avec `password_hash = NULL`, role `passenger`, +10 000 XPF de démo (comme un signup classique). L'utilisateur peut compléter son téléphone et devenir conducteur depuis `/profile`.
+- **Compte FB-only** : la connexion email/password renvoie `Invalid credentials` tant que l'utilisateur ne s'est pas défini un mot de passe local.
+
+### Sécurité
+
+- L'`App Secret` est utilisé pour calculer un `appsecret_proof` HMAC-SHA256 envoyé à chaque appel Graph (recommandation Meta contre le rejeu d'access_tokens).
+- Le SDK JS n'est chargé qu'au runtime côté client si `NUXT_PUBLIC_FACEBOOK_APP_ID` est non-vide — pas de tracking tiers en dev sans Facebook configuré.
+- Les permissions demandées sont minimales : `email,public_profile`.
 
 ## Limitations MVP
 

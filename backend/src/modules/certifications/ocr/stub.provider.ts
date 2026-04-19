@@ -3,7 +3,10 @@ import type {
   OcrInsuranceExtraction,
   OcrLicenseExtraction,
   OcrProvider,
+  OcrVehicleExtraction,
 } from './ocr-provider.interface';
+
+const STUB_NOTES = 'OCR désactivé (provider stub) — revue manuelle requise';
 
 /**
  * Fallback provider used when no OCR backend is configured (e.g. local
@@ -23,7 +26,7 @@ export class StubOcrProvider implements OcrProvider {
       name: null,
       expires_at: null,
       confidence: 0,
-      decision_notes: 'OCR désactivé (provider stub) — revue manuelle requise',
+      decision_notes: STUB_NOTES,
       raw: null,
     });
   }
@@ -36,7 +39,23 @@ export class StubOcrProvider implements OcrProvider {
       plate: null,
       expires_at: null,
       confidence: 0,
-      decision_notes: 'OCR désactivé (provider stub) — revue manuelle requise',
+      decision_notes: STUB_NOTES,
+      raw: null,
+    });
+  }
+
+  extractVehicle(): Promise<OcrVehicleExtraction> {
+    this.logger.warn(
+      'StubOcrProvider in use: vehicle photo analysis returns empty fields',
+    );
+    return Promise.resolve({
+      make: null,
+      model: null,
+      color: null,
+      plate: null,
+      confidence: 0,
+      decision_notes:
+        'OCR désactivé (provider stub) — saisis les champs manuellement',
       raw: null,
     });
   }

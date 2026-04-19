@@ -80,7 +80,7 @@ describe('BootstrapAdminService.upsert', () => {
     expect(state.wallets).toHaveLength(1);
     expect(state.wallets[0]?.balance_xpf).toBe(0);
     expect(
-      await bcrypt.compare('verysecret123', state.users[0].password_hash),
+      await bcrypt.compare('verysecret123', state.users[0].password_hash!),
     ).toBe(true);
   });
 
@@ -164,7 +164,7 @@ describe('BootstrapAdminService.upsert', () => {
     });
     expect(result.passwordReset).toBe(true);
     expect(
-      await bcrypt.compare('rotated-secret', state.users[0].password_hash),
+      await bcrypt.compare('rotated-secret', state.users[0].password_hash!),
     ).toBe(true);
   });
 

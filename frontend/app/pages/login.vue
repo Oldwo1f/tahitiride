@@ -16,6 +16,30 @@ const toast = useToast()
 
 const route = useRoute()
 
+/**
+ * Shared post-login handler used by both the email/password form and
+ * the Facebook button: shows a welcome toast then routes based on
+ * `?redirect=` (deep link) > admin role > default `/map`.
+ */
+async function onAuthSuccess(res: AuthResponse) {
+  toast.add({
+    severity: 'success',
+    summary: 'Bienvenue',
+    detail: res.user.full_name,
+    life: 2000,
+  })
+  const redirectQuery = route.query.redirect
+  const redirect =
+    typeof redirectQuery === 'string' ? redirectQuery : null
+  if (redirect && redirect.startsWith('/')) {
+    await navigateTo(redirect)
+  } else if (res.user.role === 'admin') {
+    await navigateTo('/admin')
+  } else {
+    await navigateTo('/map')
+  }
+}
+
 async function submit() {
   if (!email.value || !password.value) return
   loading.value = true
@@ -26,22 +50,7 @@ async function submit() {
       body: { email: email.value, password: password.value },
     })
     auth.setAuth(res)
-    toast.add({
-      severity: 'success',
-      summary: 'Bienvenue',
-      detail: res.user.full_name,
-      life: 2000,
-    })
-    const redirectQuery = route.query.redirect
-    const redirect =
-      typeof redirectQuery === 'string' ? redirectQuery : null
-    if (redirect && redirect.startsWith('/')) {
-      await navigateTo(redirect)
-    } else if (res.user.role === 'admin') {
-      await navigateTo('/admin')
-    } else {
-      await navigateTo('/map')
-    }
+    await onAuthSuccess(res)
   } catch (e: unknown) {
     const msg =
       (e as { data?: { message?: string }; message?: string })?.data?.message ||
@@ -92,6 +101,13 @@ async function submit() {
             :loading="loading"
             fluid
           />
+          <Divider align="center" type="solid" class="auth-divider">
+            <span class="tr-subtle">OU</span>
+          </Divider>
+          <FacebookLoginButton
+            @success="onAuthSuccess"
+            @error="(msg) => (error = msg)"
+          />
           <div class="tr-subtle" style="text-align: center;">
             Pas de compte ?
             <NuxtLink to="/register">Inscription</NuxtLink>
@@ -129,5 +145,8 @@ async function submit() {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+}
+.auth-divider {
+  margin: 0.25rem 0;
 }
 </style>

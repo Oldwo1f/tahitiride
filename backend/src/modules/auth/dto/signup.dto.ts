@@ -1,18 +1,21 @@
 import {
   IsEmail,
-  IsEnum,
   IsOptional,
   IsString,
   MaxLength,
   MinLength,
 } from 'class-validator';
-import { UserRole } from '../../../common/types/direction.enum';
 
 /**
  * The signup payload accepts either the legacy `full_name` field (so
  * older clients keep working) or the split `first_name` + `last_name`
  * pair. The auth service prefers the split fields when present and
  * falls back to splitting `full_name` on the first space otherwise.
+ *
+ * Role is no longer accepted from the client: every self-service signup
+ * lands as `passenger`. Drivers go through the onboarding wizard from
+ * `/profile` which auto-promotes the account to `both` once a vehicle
+ * is created.
  */
 export class SignupDto {
   @IsEmail()
@@ -45,8 +48,4 @@ export class SignupDto {
   @IsString()
   @MaxLength(32)
   phone?: string;
-
-  @IsOptional()
-  @IsEnum(UserRole)
-  role?: UserRole;
 }

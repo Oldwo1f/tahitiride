@@ -24,8 +24,22 @@ export class User {
   @Column({ type: 'varchar', length: 32, nullable: true })
   phone!: string | null;
 
-  @Column({ type: 'varchar', length: 255 })
-  password_hash!: string;
+  /**
+   * Bcrypt hash of the local password. Nullable because a user signing
+   * in via Facebook for the first time has no local password — the
+   * `login()` flow rejects empty/null hashes upfront so this never
+   * weakens email/password authentication.
+   */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  password_hash!: string | null;
+
+  /**
+   * Stable Facebook user id (returned by Graph API `/me?fields=id`).
+   * A partial unique index in the migration guarantees one Facebook
+   * account maps to at most one local user.
+   */
+  @Column({ type: 'varchar', length: 64, nullable: true, unique: true })
+  facebook_id!: string | null;
 
   /**
    * Display name kept as a denormalised cache so the existing modules

@@ -22,7 +22,11 @@ import { RealtimeBus } from '../realtime-bus/realtime-bus.service';
 import { UploadsService } from '../uploads/uploads.service';
 import type { AdminCertificationListQueryDto } from './dto/admin-list-query.dto';
 import { nameSimilarity, plateMatches } from './name-match';
-import { OCR_PROVIDER, type OcrProvider } from './ocr/ocr-provider.interface';
+import {
+  OCR_PROVIDER,
+  type OcrProvider,
+  type OcrVehicleExtraction,
+} from './ocr/ocr-provider.interface';
 
 const REMINDER_WINDOW_DAYS = 14;
 
@@ -206,6 +210,39 @@ export class CertificationsService {
     await this.certifications.save(saved);
 
     return this.toDto(saved);
+  }
+
+  /**
+   * Sends a 3/4-face vehicle photo to the OCR backend so the driver
+   * onboarding wizard can pre-fill the vehicle creation form. Stateless:
+   * no DB write, no upload — the photo is only persisted later by
+   * `VehiclesService.createMine` when the user confirms the form.
+   */
+  async analyzeVehiclePhoto(
+    file: Express.Multer.File | undefined,
+  ): Promise<OcrVehicleExtraction> {
+    if (!file) {
+      throw new BadRequestException('Aucun fichier fourni');
+    }
+    if (!file.buffer || file.buffer.length === 0) {
+      throw new BadRequestException('Fichier vide');
+    }
+    try {
+      return await this.ocr.extractVehicle(file.buffer, file.mimetype);
+    } catch (err) {
+      this.logger.error(
+        `OCR failure on vehicle photo: ${(err as Error).message}`,
+      );
+      return {
+        make: null,
+        model: null,
+        color: null,
+        plate: null,
+        confidence: 0,
+        decision_notes: `Erreur OCR: ${(err as Error).message}`,
+        raw: null,
+      };
+    }
   }
 
   async submitInsurance(

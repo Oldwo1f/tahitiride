@@ -17,6 +17,7 @@ import { UserRole } from '../../common/types/direction.enum';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import {
   categoryDir,
+  PUBLIC_UPLOAD_CATEGORIES,
   resolveUploadRoot,
   UploadCategory,
   UPLOAD_CATEGORIES,
@@ -67,7 +68,7 @@ export class UploadsController {
       throw new NotFoundException('Fichier introuvable');
     }
 
-    if (cat !== 'avatars') {
+    if (!PUBLIC_UPLOAD_CATEGORIES.has(cat)) {
       const isAdmin = (user.role as UserRole) === UserRole.ADMIN;
       const owns = await this.access.canAccess(user.id, cat, filename);
       if (!owns && !isAdmin) {

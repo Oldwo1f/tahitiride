@@ -8,6 +8,7 @@ import { WalletTransaction } from '../../entities/wallet-transaction.entity';
 import { Wallet } from '../../entities/wallet.entity';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { FacebookService } from './facebook.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { JwtStrategy } from './jwt.strategy';
 import { RolesGuard } from './roles.guard';
@@ -31,7 +32,14 @@ import { WsJwtGuard } from './ws-jwt.guard';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, JwtAuthGuard, RolesGuard, WsJwtGuard],
+  providers: [
+    AuthService,
+    FacebookService,
+    JwtStrategy,
+    JwtAuthGuard,
+    RolesGuard,
+    WsJwtGuard,
+  ],
   exports: [AuthService, JwtAuthGuard, RolesGuard, WsJwtGuard, JwtModule],
 })
 export class AuthModule {}

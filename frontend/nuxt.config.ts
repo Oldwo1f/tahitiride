@@ -20,6 +20,9 @@ export default defineNuxtConfig({
       apiBase: 'http://localhost:3001',
       socketUrl: 'http://localhost:3001',
       mapboxToken: '',
+      // Empty string disables the "Continue with Facebook" button at
+      // runtime (the FB SDK is only loaded when an App ID is set).
+      facebookAppId: '',
     },
   },
 

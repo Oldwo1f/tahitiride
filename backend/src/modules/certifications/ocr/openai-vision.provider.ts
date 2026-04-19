@@ -5,6 +5,7 @@ import type {
   OcrInsuranceExtraction,
   OcrLicenseExtraction,
   OcrProvider,
+  OcrVehicleExtraction,
 } from './ocr-provider.interface';
 
 const DEFAULT_MODEL = 'gpt-4o-mini';
@@ -33,8 +34,25 @@ Règles strictes :
 - Pour les dates : convertis "JJ/MM/AAAA" en "AAAA-MM-JJ".
 - Si le document ne ressemble PAS à une vignette/attestation d'assurance, mets confidence=0 et notes="Document non reconnu comme vignette d'assurance".`;
 
+const VEHICLE_PROMPT = `Tu es un système d'identification de véhicules à partir d'une photo prise du bord de route (vue 3/4 avant, comme si la photo était prise par un passager qui attend).
+À partir de l'image, retourne UNIQUEMENT un objet JSON avec les clés suivantes :
+- "make": marque du véhicule (ex: "Toyota", "Renault", "Peugeot") ou null si illisible.
+- "model": modèle (ex: "Corolla", "Clio", "208") ou null.
+- "color": couleur dominante de la carrosserie en français en un mot (ex: "blanc", "rouge", "gris", "noir", "bleu") ou null.
+- "plate": immatriculation visible en majuscules sans espace (ex: "AB123CD") ou null.
+- "confidence": nombre entre 0 et 1 indiquant ta confiance globale dans l'identification.
+- "notes": brève explication en français si confidence < 0.8 (sinon null).
+
+Règles strictes :
+- Pas de texte hors du JSON.
+- Si l'image ne montre PAS un véhicule (ex: paysage, document, personne), mets confidence=0 et notes="Image non reconnue comme véhicule".
+- Si la plaque n'est pas lisible, mets plate=null (ne devine pas).`;
+
 interface RawJsonResponse {
   name?: string | null;
+  make?: string | null;
+  model?: string | null;
+  color?: string | null;
   plate?: string | null;
   expires_at?: string | null;
   confidence?: number | null;
@@ -86,15 +104,40 @@ export class OpenAiVisionOcrProvider implements OcrProvider {
   ): Promise<OcrInsuranceExtraction> {
     const raw = await this.callVision(INSURANCE_PROMPT, buffer, mime);
     return {
-      plate:
-        typeof raw?.plate === 'string'
-          ? raw.plate.replace(/[^A-Z0-9]/gi, '').toUpperCase() || null
-          : null,
+      plate: this.normalisePlate(raw?.plate),
       expires_at: this.normaliseDate(raw?.expires_at),
       confidence: this.clampConfidence(raw?.confidence),
       decision_notes: typeof raw?.notes === 'string' ? raw.notes : null,
       raw,
     };
+  }
+
+  async extractVehicle(
+    buffer: Buffer,
+    mime: string,
+  ): Promise<OcrVehicleExtraction> {
+    const raw = await this.callVision(VEHICLE_PROMPT, buffer, mime);
+    return {
+      make: this.cleanString(raw?.make),
+      model: this.cleanString(raw?.model),
+      color: this.cleanString(raw?.color)?.toLowerCase() ?? null,
+      plate: this.normalisePlate(raw?.plate),
+      confidence: this.clampConfidence(raw?.confidence),
+      decision_notes: typeof raw?.notes === 'string' ? raw.notes : null,
+      raw,
+    };
+  }
+
+  private cleanString(input: unknown): string | null {
+    if (typeof input !== 'string') return null;
+    const trimmed = input.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  private normalisePlate(input: unknown): string | null {
+    if (typeof input !== 'string') return null;
+    const cleaned = input.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+    return cleaned.length > 0 ? cleaned : null;
   }
 
   private async callVision(

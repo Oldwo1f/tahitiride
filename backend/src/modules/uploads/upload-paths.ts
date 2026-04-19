@@ -1,12 +1,26 @@
 import { join } from 'path';
 
-export type UploadCategory = 'licenses' | 'insurance' | 'avatars';
+export type UploadCategory = 'licenses' | 'insurance' | 'avatars' | 'vehicles';
 
 export const UPLOAD_CATEGORIES: UploadCategory[] = [
   'licenses',
   'insurance',
   'avatars',
+  'vehicles',
 ];
+
+/**
+ * Categories that any authenticated user is allowed to download (no
+ * ownership check). Currently:
+ *   - `avatars`: peers see each other on the map / trip screens.
+ *   - `vehicles`: passengers waiting on the side of the road need to
+ *     recognise the car arriving (3/4 face photo captured during the
+ *     driver onboarding wizard).
+ */
+export const PUBLIC_UPLOAD_CATEGORIES: ReadonlySet<UploadCategory> = new Set([
+  'avatars',
+  'vehicles',
+]);
 
 /**
  * Resolves the absolute filesystem root used for all uploads. Defaults to

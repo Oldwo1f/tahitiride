@@ -28,8 +28,7 @@ const ocrProvider: Provider = {
     const logger = new Logger('OcrProviderFactory');
     const key = config.get<string>('OPENAI_API_KEY');
     if (key && key.trim().length > 0) {
-      const model =
-        config.get<string>('OPENAI_VISION_MODEL') || 'gpt-4o-mini';
+      const model = config.get<string>('OPENAI_VISION_MODEL') || 'gpt-4o-mini';
       logger.log(`OCR provider: OpenAI Vision (${model})`);
       return new OpenAiVisionOcrProvider(config);
     }
