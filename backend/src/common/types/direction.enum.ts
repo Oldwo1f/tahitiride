@@ -22,3 +22,15 @@ export enum WalletTransactionType {
   CREDIT = 'credit',
   ADJUSTMENT = 'adjustment',
 }
+
+export enum WalletRequestType {
+  DEPOSIT = 'deposit',
+  PAYOUT = 'payout',
+}
+
+export enum WalletRequestStatus {
+  PENDING = 'pending',
+  APPROVED = 'approved',
+  REJECTED = 'rejected',
+  CANCELLED = 'cancelled',
+}

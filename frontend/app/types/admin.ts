@@ -1,6 +1,9 @@
 import type {
+  Certification,
   TripStatus,
   UserRole,
+  WalletRequestStatus,
+  WalletRequestType,
   WalletTransactionKind,
 } from './api'
 
@@ -121,12 +124,43 @@ export interface AdminVehicleListItem {
 export interface AdminSetting {
   key: string
   label: string
-  type: 'integer'
-  min: number
-  max: number
+  type: 'integer' | 'string'
+  /** Present when `type === 'integer'`. */
+  min?: number
+  /** Present when `type === 'integer'`. */
+  max?: number
+  /** Present when `type === 'string'`. */
+  maxLength?: number
+  /** Present when `type === 'string'`. Hints the UI to render a Textarea. */
+  multiline?: boolean
   default: number | string | null
   override: number | string | null
   value: number | string
+}
+
+export interface AdminWalletRequestItem {
+  id: string
+  user_id: string
+  user_email: string
+  user_full_name: string
+  type: WalletRequestType
+  status: WalletRequestStatus
+  amount_xpf: number
+  iban: string | null
+  account_holder_name: string | null
+  user_note: string | null
+  admin_note: string | null
+  processed_by_user_id: string | null
+  processed_by_email: string | null
+  processed_at: string | null
+  /** Live wallet balance of the requesting user, joined server-side. */
+  balance_xpf: number
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminWalletRequestPendingCount {
+  count: number
 }
 
 export interface AdminAction {
@@ -138,6 +172,22 @@ export interface AdminAction {
   target_id: string | null
   payload: Record<string, unknown>
   created_at: string
+}
+
+export interface AdminCertification extends Certification {
+  user: {
+    id: string
+    email: string
+    full_name: string
+    first_name: string | null
+    last_name: string | null
+  }
+  vehicle: {
+    id: string
+    plate: string
+    model: string
+    color: string
+  } | null
 }
 
 export interface AdminOverview {

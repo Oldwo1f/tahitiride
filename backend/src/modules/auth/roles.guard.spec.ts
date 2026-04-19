@@ -14,7 +14,9 @@ interface UserRow {
   deleted_at: Date | null;
 }
 
-function buildContext(user: { id: string; role: string } | null): ExecutionContext {
+function buildContext(
+  user: { id: string; role: string } | null,
+): ExecutionContext {
   const req = { user: user ?? undefined };
   return {
     switchToHttp: () => ({ getRequest: () => req }),
@@ -50,9 +52,9 @@ describe('RolesGuard', () => {
 
   it('throws Unauthorized when no user is attached to the request', async () => {
     const guard = buildGuard({ required: [UserRole.ADMIN], rows: [] });
-    await expect(
-      guard.canActivate(buildContext(null)),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(guard.canActivate(buildContext(null))).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
   });
 
   it('rejects when the DB role does not match the required set', async () => {

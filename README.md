@@ -152,8 +152,9 @@ Les pages `/admin/settings` permettent d'éditer à chaud sans redémarrage les 
 
 | Clé | Variable d'env d'origine | Description |
 |---|---|---|
-| `app.fareBaseXpf` | `FARE_BASE_XPF` | Tarif fixe de prise en charge (XPF) |
-| `app.farePerKmXpf` | `FARE_PER_KM_XPF` | Tarif par kilomètre (XPF) |
+| `app.fareBaseXpf` | `FARE_BASE_XPF` | Forfait fixe de prise en charge (XPF), 100 % gardé par la plateforme |
+| `app.farePerKmXpf` | `FARE_PER_KM_XPF` | Tarif total au kilomètre facturé au passager (XPF) |
+| `app.appMarginPerKmXpf` | `APP_MARGIN_PER_KM_XPF` | Marge par kilomètre conservée par la plateforme (XPF) ; le chauffeur perçoit `farePerKmXpf − appMarginPerKmXpf` par km |
 | `app.initialWalletBalanceXpf` | `INITIAL_WALLET_BALANCE_XPF` | Solde initial des nouveaux comptes |
 | `app.pickupMaxDistanceMeters` | `PICKUP_MAX_DISTANCE_METERS` | Distance max passager↔conducteur pour scanner le QR de prise en charge |
 | `app.dropoffMinDelaySeconds` | `DROPOFF_MIN_DELAY_SECONDS` | Délai minimum entre prise en charge et dépose |
@@ -164,6 +165,66 @@ Toute modification est tracée dans le journal d'audit (`/admin/audit`) avec l'a
 ### Audit log
 
 Toutes les actions sensibles (changement de rôle, suspension, soft-delete, ajustement de wallet, annulation de trajet, suppression de véhicule, modification d'un paramètre) sont enregistrées dans `admin_actions` et consultables sur `/admin/audit` avec filtres par acteur et type d'action. La table est append-only — il n'existe pas d'endpoint API pour modifier ou supprimer une entrée.
+
+## Certification des chauffeurs (permis + vignette d'assurance)
+
+Pour pouvoir être marqué `is_certified = true` et apparaître activement comme conducteur, chaque chauffeur doit fournir :
+
+1. Une photo de son **permis de conduire** (recto, lisible, nom identique à celui du profil).
+2. Pour **chaque véhicule**, une photo de la **vignette d'assurance** (plaque + date de fin de validité visibles).
+
+Les pages `/profile` (côté chauffeur) et `/admin/certifications` (côté admin) gèrent l'ensemble du cycle de vie : upload, OCR automatique (OpenAI Vision), revue manuelle si besoin, expiration et rappel à J-14.
+
+### Architecture
+
+| Couche | Détail |
+|---|---|
+| Stockage | Volume Docker `uploads` monté sur `/app/uploads` (`licenses/`, `insurance/`, `avatars/`). En dev, dossier `backend/uploads/` (créé automatiquement). |
+| API | `POST /api/certifications/license`, `POST /api/certifications/vehicle/:id/insurance`, `GET /api/certifications/me`, plus l'admin sous `/api/admin/certifications`. |
+| Servir les fichiers | `GET /api/uploads/<category>/<filename>` derrière `JwtAuthGuard` + contrôle de propriété (le chauffeur ne voit que ses pièces, l'admin voit tout, les avatars sont accessibles à tout utilisateur authentifié). |
+| OCR | Provider injecté via le token DI `OCR_PROVIDER`. Implémentation par défaut : `OpenAiVisionOcrProvider` (`gpt-4o-mini`, prompt JSON structuré). Sans `OPENAI_API_KEY`, fallback `StubOcrProvider` qui force la revue manuelle. |
+| Décision auto | Le service auto-approuve quand la similarité de nom (Levenshtein normalisé) ≥ `OCR_NAME_SIMILARITY_THRESHOLD`, la confiance OCR ≥ `OCR_MIN_CONFIDENCE`, et que la date de validité est dans le futur. Sinon : `pending_review`. |
+| Revue manuelle | Page `/admin/certifications` : aperçu du document, données extraites, boutons Approuver / Rejeter (avec motif). Toute action est tracée dans le journal d'audit (`certification.approve` / `certification.reject`). |
+| Rappel | Cron quotidien (`@nestjs/schedule`, 03:00) qui (1) flippe les certifs expirées en `expired` et décertifie le véhicule, (2) émet un événement Socket.IO `certification:expiring` aux chauffeurs dont une vignette expire dans ≤ 14 jours. Le frontend ouvre une popup avec dismissal `localStorage` (TTL 24 h) et raccourci de réupload. |
+
+### Variables d'environnement
+
+| Clé | Défaut | Description |
+|---|---|---|
+| `UPLOAD_DIR` | `/app/uploads` (Docker) ou `<cwd>/uploads` (dev) | Racine disque des fichiers uploadés |
+| `OPENAI_API_KEY` | (vide) | Active l'OCR auto via OpenAI Vision. Vide → stub manuel |
+| `OPENAI_VISION_MODEL` | `gpt-4o-mini` | Modèle OpenAI Vision utilisé |
+| `OCR_NAME_SIMILARITY_THRESHOLD` | `0.85` | Similarité minimale entre nom OCR et nom du profil pour auto-approbation |
+| `OCR_MIN_CONFIDENCE` | `0.8` | Confiance minimale (0..1) pour auto-approbation |
+
+### Cycle de vie d'une certification
+
+```
+upload ──► pending_ocr ──┬─► approved   (OCR + thresholds OK + date future)
+                         ├─► pending_review  (OCR ambigu ou date manquante)
+                         ▲   │
+                  admin approve / reject
+                             │
+                             ├─► approved    (admin force l'expiration)
+                             └─► rejected    (motif obligatoire)
+
+approved ──► expired (cron quotidien quand expires_at < today)
+```
+
+Les vignettes approuvées propagent immédiatement `vehicles.is_certified=true` et `vehicles.certified_until=<date>`. Le rejet d'une vignette précédemment approuvée décertifie aussitôt le véhicule.
+
+### Backup des fichiers
+
+Le volume `uploads` se sauvegarde comme la base :
+
+```bash
+docker run --rm \
+  -v tahiti_ride_uploads:/data \
+  -v "$PWD":/backup \
+  alpine tar czf /backup/uploads-$(date +%F).tar.gz -C /data .
+```
+
+(Le nom exact du volume dépend du nom du projet docker-compose : `docker volume ls | grep uploads`.)
 
 ## Déploiement Docker derrière Traefik
 

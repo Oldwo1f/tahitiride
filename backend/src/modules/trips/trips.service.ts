@@ -19,10 +19,7 @@ import { QrService } from '../qr/qr.service';
 import { RealtimeBus } from '../realtime-bus/realtime-bus.service';
 import { SettingsService } from '../settings/settings.service';
 import { WalletService } from '../wallet/wallet.service';
-import type {
-  EstimateDto,
-  EstimateResponseDto,
-} from './dto/estimate.dto';
+import type { EstimateDto, EstimateResponseDto } from './dto/estimate.dto';
 import type { DropoffPositionDto, PickupDto } from './dto/pickup.dto';
 import type { TripSummaryDto } from './dto/trip-summary.dto';
 
@@ -81,10 +78,7 @@ export class TripsService {
     }
 
     const distance = this.locations.distanceMeters(passengerPos, driverPos);
-    const maxDist = this.settings.getNumber(
-      'app.pickupMaxDistanceMeters',
-      50,
-    );
+    const maxDist = this.settings.getNumber('app.pickupMaxDistanceMeters', 50);
     if (distance > maxDist) {
       throw new BadRequestException(
         `Too far from driver (${Math.round(distance)}m > ${maxDist}m)`,

@@ -6,7 +6,8 @@ definePageMeta({
   middleware: ['guest'],
 })
 
-const full_name = ref('')
+const first_name = ref('')
+const last_name = ref('')
 const email = ref('')
 const password = ref('')
 const phone = ref('')
@@ -24,14 +25,21 @@ const roleOptions = [
 ]
 
 async function submit() {
-  if (!full_name.value || !email.value || password.value.length < 8) return
+  if (
+    !first_name.value ||
+    !last_name.value ||
+    !email.value ||
+    password.value.length < 8
+  )
+    return
   loading.value = true
   error.value = null
   try {
     const res = await api<AuthResponse>('/api/auth/signup', {
       method: 'POST',
       body: {
-        full_name: full_name.value,
+        first_name: first_name.value,
+        last_name: last_name.value,
         email: email.value,
         password: password.value,
         phone: phone.value || undefined,
@@ -68,9 +76,27 @@ async function submit() {
     <Card>
       <template #content>
         <form @submit.prevent="submit" class="login-form">
-          <div class="field">
-            <label for="fn">Nom complet</label>
-            <InputText id="fn" v-model="full_name" required />
+          <div class="name-row">
+            <div class="field">
+              <label for="fn">Prénom</label>
+              <InputText
+                id="fn"
+                v-model="first_name"
+                autocomplete="given-name"
+                required
+                fluid
+              />
+            </div>
+            <div class="field">
+              <label for="ln">Nom</label>
+              <InputText
+                id="ln"
+                v-model="last_name"
+                autocomplete="family-name"
+                required
+                fluid
+              />
+            </div>
           </div>
           <div class="field">
             <label for="email">Email</label>
@@ -151,5 +177,10 @@ async function submit() {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+}
+.name-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
 }
 </style>

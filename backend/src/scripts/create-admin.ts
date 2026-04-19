@@ -39,7 +39,6 @@ function parseArgs(argv: string[]): CliArgs {
 }
 
 function printHelp(): void {
-  // eslint-disable-next-line no-console
   console.log(`Usage:
   pnpm run admin:create -- --email=<email> --password=<password> [--name="<full name>"]
 
@@ -85,7 +84,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err: unknown) => {
-  // eslint-disable-next-line no-console
   console.error(
     'create-admin failed:',
     err instanceof Error ? err.stack || err.message : err,

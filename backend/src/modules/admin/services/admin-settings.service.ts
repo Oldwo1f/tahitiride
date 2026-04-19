@@ -20,19 +20,23 @@ export class AdminSettingsService {
     const overrides = this.settings.snapshot();
     return SettingsService.EDITABLE.map((entry) => {
       const overrideValue = overrides[entry.key];
-      const effective =
-        overrideValue !== undefined
-          ? overrideValue
-          : this.config.get(entry.configKey);
-      return {
+      const fallback = this.config.get<unknown>(entry.configKey);
+      const effective = overrideValue !== undefined ? overrideValue : fallback;
+      const base = {
         key: entry.key,
         label: entry.label,
         type: entry.type,
-        min: entry.min,
-        max: entry.max,
-        default: this.config.get(entry.configKey),
+        default: fallback,
         override: overrideValue ?? null,
         value: effective,
+      };
+      if (entry.type === 'integer') {
+        return { ...base, min: entry.min, max: entry.max };
+      }
+      return {
+        ...base,
+        maxLength: entry.maxLength,
+        multiline: entry.multiline ?? false,
       };
     });
   }
@@ -44,7 +48,7 @@ export class AdminSettingsService {
     }
     const previous = this.settings.snapshot()[key] ?? null;
 
-    let value: number;
+    let value: number | string;
     if (meta.type === 'integer') {
       const n = typeof rawValue === 'number' ? rawValue : Number(rawValue);
       if (!Number.isFinite(n) || !Number.isInteger(n)) {
@@ -56,6 +60,20 @@ export class AdminSettingsService {
         );
       }
       value = n;
+    } else if (meta.type === 'string') {
+      if (typeof rawValue !== 'string') {
+        throw new BadRequestException(`Setting ${key} must be a string`);
+      }
+      const trimmed = rawValue.trim();
+      if (trimmed.length === 0) {
+        throw new BadRequestException(`Setting ${key} must not be empty`);
+      }
+      if (trimmed.length > meta.maxLength) {
+        throw new BadRequestException(
+          `Setting ${key} must be at most ${meta.maxLength} characters`,
+        );
+      }
+      value = trimmed;
     } else {
       throw new BadRequestException('Unsupported setting type');
     }

@@ -1,12 +1,28 @@
-import {
-  Injectable,
-  Logger,
-  OnApplicationBootstrap,
-} from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AppSetting } from '../../entities/app-setting.entity';
+
+export interface EditableIntegerSetting {
+  key: string;
+  configKey: string;
+  label: string;
+  type: 'integer';
+  min: number;
+  max: number;
+}
+
+export interface EditableStringSetting {
+  key: string;
+  configKey: string;
+  label: string;
+  type: 'string';
+  maxLength: number;
+  multiline?: boolean;
+}
+
+export type EditableSetting = EditableIntegerSetting | EditableStringSetting;
 
 /**
  * Runtime overlay over `ConfigService`. Looks up `app_settings` rows first
@@ -23,15 +39,12 @@ export class SettingsService implements OnApplicationBootstrap {
   /**
    * Whitelist of admin-editable settings + their fallback config key. Anything
    * not in this map is rejected by the admin endpoint.
+   *
+   * `type='integer'` entries carry `min` / `max` bounds; `type='string'`
+   * entries carry `maxLength` and `multiline` (the admin UI renders a
+   * Textarea instead of an InputText when `multiline` is true).
    */
-  static readonly EDITABLE: ReadonlyArray<{
-    key: string;
-    configKey: string;
-    label: string;
-    type: 'integer';
-    min: number;
-    max: number;
-  }> = [
+  static readonly EDITABLE: ReadonlyArray<EditableSetting> = [
     {
       key: 'app.fareBaseXpf',
       configKey: 'app.fareBaseXpf',
@@ -44,6 +57,14 @@ export class SettingsService implements OnApplicationBootstrap {
       key: 'app.farePerKmXpf',
       configKey: 'app.farePerKmXpf',
       label: 'Tarif au kilomètre (XPF)',
+      type: 'integer',
+      min: 0,
+      max: 100_000,
+    },
+    {
+      key: 'app.appMarginPerKmXpf',
+      configKey: 'app.appMarginPerKmXpf',
+      label: 'Marge plateforme au kilomètre (XPF)',
       type: 'integer',
       min: 0,
       max: 100_000,
@@ -79,6 +100,58 @@ export class SettingsService implements OnApplicationBootstrap {
       type: 'integer',
       min: 100,
       max: 50_000,
+    },
+    {
+      key: 'app.payoutMinBalanceXpf',
+      configKey: 'app.payoutMinBalanceXpf',
+      label: 'Solde minimum pour demander un retrait (XPF)',
+      type: 'integer',
+      min: 0,
+      max: 1_000_000,
+    },
+    {
+      key: 'app.depositMinAmountXpf',
+      configKey: 'app.depositMinAmountXpf',
+      label: 'Montant minimum pour un dépôt (XPF)',
+      type: 'integer',
+      min: 0,
+      max: 1_000_000,
+    },
+    {
+      key: 'app.bankName',
+      configKey: 'app.bankName',
+      label: 'Banque (RIB plateforme)',
+      type: 'string',
+      maxLength: 120,
+    },
+    {
+      key: 'app.bankIban',
+      configKey: 'app.bankIban',
+      label: 'IBAN (RIB plateforme)',
+      type: 'string',
+      maxLength: 34,
+    },
+    {
+      key: 'app.bankBic',
+      configKey: 'app.bankBic',
+      label: 'BIC / SWIFT (RIB plateforme)',
+      type: 'string',
+      maxLength: 11,
+    },
+    {
+      key: 'app.bankAccountHolder',
+      configKey: 'app.bankAccountHolder',
+      label: 'Titulaire du compte (RIB plateforme)',
+      type: 'string',
+      maxLength: 120,
+    },
+    {
+      key: 'app.bankInstructions',
+      configKey: 'app.bankInstructions',
+      label: 'Instructions de virement affichées à l’utilisateur',
+      type: 'string',
+      maxLength: 500,
+      multiline: true,
     },
   ];
 

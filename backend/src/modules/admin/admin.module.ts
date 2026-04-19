@@ -5,6 +5,7 @@ import { Trip } from '../../entities/trip.entity';
 import { TripPoint } from '../../entities/trip-point.entity';
 import { User } from '../../entities/user.entity';
 import { Vehicle } from '../../entities/vehicle.entity';
+import { WalletRequest } from '../../entities/wallet-request.entity';
 import { WalletTransaction } from '../../entities/wallet-transaction.entity';
 import { Wallet } from '../../entities/wallet.entity';
 import { AdminController } from './admin.controller';
@@ -14,6 +15,7 @@ import { AdminSettingsService } from './services/admin-settings.service';
 import { AdminTripsService } from './services/admin-trips.service';
 import { AdminUsersService } from './services/admin-users.service';
 import { AdminVehiclesService } from './services/admin-vehicles.service';
+import { AdminWalletRequestsService } from './services/admin-wallet-requests.service';
 import { AdminWalletsService } from './services/admin-wallets.service';
 import { BootstrapAdminService } from './services/bootstrap-admin.service';
 
@@ -23,6 +25,7 @@ import { BootstrapAdminService } from './services/bootstrap-admin.service';
       User,
       Wallet,
       WalletTransaction,
+      WalletRequest,
       Trip,
       TripPoint,
       Vehicle,
@@ -34,12 +37,13 @@ import { BootstrapAdminService } from './services/bootstrap-admin.service';
     AdminAuditService,
     AdminUsersService,
     AdminWalletsService,
+    AdminWalletRequestsService,
     AdminTripsService,
     AdminVehiclesService,
     AdminSettingsService,
     AdminAnalyticsService,
     BootstrapAdminService,
   ],
-  exports: [BootstrapAdminService],
+  exports: [BootstrapAdminService, AdminAuditService],
 })
 export class AdminModule {}

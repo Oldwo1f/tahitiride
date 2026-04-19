@@ -1,9 +1,11 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { WalletTransactionType } from '../../common/types/direction.enum';
 import { WalletTransaction } from '../../entities/wallet-transaction.entity';
 import { Wallet } from '../../entities/wallet.entity';
+import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
 export class WalletService {
@@ -12,7 +14,60 @@ export class WalletService {
     @InjectRepository(WalletTransaction)
     private readonly txs: Repository<WalletTransaction>,
     private readonly dataSource: DataSource,
+    private readonly settings: SettingsService,
+    private readonly config: ConfigService,
   ) {}
+
+  /**
+   * Returns the platform's bank coordinates so the deposit dialog can
+   * tell the user where to wire the funds. Reads from the runtime
+   * settings overlay first (admin can edit them via /admin/settings)
+   * and falls back to the static env-based config.
+   */
+  getDepositInfo() {
+    const min = this.settings.getNumber(
+      'app.depositMinAmountXpf',
+      this.config.get<number>('app.depositMinAmountXpf', 100),
+    );
+    return {
+      bank_name: this.settings.getString(
+        'app.bankName',
+        this.config.get<string>('app.bankName', '') ?? '',
+      ),
+      iban: this.settings.getString(
+        'app.bankIban',
+        this.config.get<string>('app.bankIban', '') ?? '',
+      ),
+      bic: this.settings.getString(
+        'app.bankBic',
+        this.config.get<string>('app.bankBic', '') ?? '',
+      ),
+      account_holder: this.settings.getString(
+        'app.bankAccountHolder',
+        this.config.get<string>('app.bankAccountHolder', '') ?? '',
+      ),
+      instructions: this.settings.getString(
+        'app.bankInstructions',
+        this.config.get<string>('app.bankInstructions', '') ?? '',
+      ),
+      min_amount_xpf: min,
+    };
+  }
+
+  getLimits() {
+    const payoutMin = this.settings.getNumber(
+      'app.payoutMinBalanceXpf',
+      this.config.get<number>('app.payoutMinBalanceXpf', 1000),
+    );
+    const depositMin = this.settings.getNumber(
+      'app.depositMinAmountXpf',
+      this.config.get<number>('app.depositMinAmountXpf', 100),
+    );
+    return {
+      payout_min_balance_xpf: payoutMin,
+      deposit_min_amount_xpf: depositMin,
+    };
+  }
 
   async getMine(userId: string) {
     const w = await this.wallets.findOne({ where: { user_id: userId } });

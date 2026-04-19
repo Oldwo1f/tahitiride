@@ -18,6 +18,10 @@ import { UserRole } from '../../common/types/direction.enum';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { AdjustWalletDto } from './dto/adjust-wallet.dto';
+import {
+  ApproveWalletRequestDto,
+  RejectWalletRequestDto,
+} from '../wallet-requests/dto/admin-action.dto';
 import { AuditListQueryDto } from './dto/audit-list-query.dto';
 import { CancelTripDto } from './dto/cancel-trip.dto';
 import { ListQueryDto } from './dto/list-query.dto';
@@ -25,12 +29,14 @@ import { TripsListQueryDto } from './dto/trips-list-query.dto';
 import { UpdateSettingDto } from './dto/update-setting.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { UsersListQueryDto } from './dto/users-list-query.dto';
+import { WalletRequestsListQueryDto } from './dto/wallet-requests-list-query.dto';
 import { AdminAnalyticsService } from './services/admin-analytics.service';
 import { AdminAuditService } from './services/admin-audit.service';
 import { AdminSettingsService } from './services/admin-settings.service';
 import { AdminTripsService } from './services/admin-trips.service';
 import { AdminUsersService } from './services/admin-users.service';
 import { AdminVehiclesService } from './services/admin-vehicles.service';
+import { AdminWalletRequestsService } from './services/admin-wallet-requests.service';
 import { AdminWalletsService } from './services/admin-wallets.service';
 
 interface VehiclesListQueryExt extends ListQueryDto {
@@ -45,6 +51,7 @@ export class AdminController {
     private readonly analytics: AdminAnalyticsService,
     private readonly users: AdminUsersService,
     private readonly wallets: AdminWalletsService,
+    private readonly walletRequests: AdminWalletRequestsService,
     private readonly trips: AdminTripsService,
     private readonly vehicles: AdminVehiclesService,
     private readonly settings: AdminSettingsService,
@@ -182,5 +189,35 @@ export class AdminController {
   @Get('audit')
   listAudit(@Query() query: AuditListQueryDto) {
     return this.audit.list(query);
+  }
+
+  @Get('wallet-requests')
+  listWalletRequests(@Query() query: WalletRequestsListQueryDto) {
+    return this.walletRequests.list(query);
+  }
+
+  @Get('wallet-requests/pending-count')
+  walletRequestsPendingCount() {
+    return this.walletRequests.pendingCount();
+  }
+
+  @Post('wallet-requests/:id/approve')
+  @HttpCode(200)
+  approveWalletRequest(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ApproveWalletRequestDto,
+    @CurrentUser() actor: AuthUser,
+  ) {
+    return this.walletRequests.approve(id, actor.id, dto.admin_note);
+  }
+
+  @Post('wallet-requests/:id/reject')
+  @HttpCode(200)
+  rejectWalletRequest(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RejectWalletRequestDto,
+    @CurrentUser() actor: AuthUser,
+  ) {
+    return this.walletRequests.reject(id, actor.id, dto.admin_note);
   }
 }

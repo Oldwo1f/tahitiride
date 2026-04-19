@@ -84,8 +84,16 @@ export class RealtimeGateway
     try {
       this.wsGuard.authenticate(client);
       const userId = client.data.user.id;
+      const role = client.data.user.role;
       void client.join(`user:${userId}`);
-      this.logger.log(`Client connected: user=${userId} sid=${client.id}`);
+      if (role) {
+        // Lets the back-end fan-out role-wide events (e.g. notify all
+        // admins of a new wallet request) without keeping a registry.
+        void client.join(`role:${role}`);
+      }
+      this.logger.log(
+        `Client connected: user=${userId} role=${role} sid=${client.id}`,
+      );
     } catch (err) {
       this.logger.warn(
         `Rejected unauthenticated socket ${client.id}: ${

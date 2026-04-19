@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  OnApplicationBootstrap,
-} from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
@@ -121,9 +117,7 @@ export class BootstrapAdminService implements OnApplicationBootstrap {
       }
 
       if (!params.password) {
-        throw new Error(
-          'Password is required to create a new admin account',
-        );
+        throw new Error('Password is required to create a new admin account');
       }
       const password_hash = await bcrypt.hash(params.password, 10);
       const created = await userRepo.save(

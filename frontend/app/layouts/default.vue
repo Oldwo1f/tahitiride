@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const auth = useAuthStore()
 </script>
 
 <template>
@@ -7,5 +8,6 @@
       <slot />
     </div>
     <BottomNav />
+    <CertificationReminderToast v-if="auth.isAuthed && auth.isDriver" />
   </div>
 </template>

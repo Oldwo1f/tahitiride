@@ -36,10 +36,12 @@ function buildService(state: RepoState): BootstrapAdminService {
           state.wallets.find((w) => w.user_id === where.user_id) ?? null,
         ),
       ),
-    save: jest.fn().mockImplementation((w: { user_id: string; balance_xpf: number }) => {
-      state.wallets.push(w);
-      return Promise.resolve(w);
-    }),
+    save: jest
+      .fn()
+      .mockImplementation((w: { user_id: string; balance_xpf: number }) => {
+        state.wallets.push(w);
+        return Promise.resolve(w);
+      }),
     create: jest.fn().mockImplementation((w) => w),
   };
   const tx = {
@@ -78,16 +80,16 @@ describe('BootstrapAdminService.upsert', () => {
     expect(state.wallets).toHaveLength(1);
     expect(state.wallets[0]?.balance_xpf).toBe(0);
     expect(
-      await bcrypt.compare('verysecret123', state.users[0]!.password_hash),
+      await bcrypt.compare('verysecret123', state.users[0].password_hash),
     ).toBe(true);
   });
 
   it('refuses to create a new admin without a password', async () => {
     const state: RepoState = { users: [], wallets: [] };
     const service = buildService(state);
-    await expect(
-      service.upsert({ email: 'ops@example.com' }),
-    ).rejects.toThrow(/password is required/i);
+    await expect(service.upsert({ email: 'ops@example.com' })).rejects.toThrow(
+      /password is required/i,
+    );
     expect(state.users).toHaveLength(0);
   });
 
@@ -162,7 +164,7 @@ describe('BootstrapAdminService.upsert', () => {
     });
     expect(result.passwordReset).toBe(true);
     expect(
-      await bcrypt.compare('rotated-secret', state.users[0]!.password_hash),
+      await bcrypt.compare('rotated-secret', state.users[0].password_hash),
     ).toBe(true);
   });
 

@@ -60,6 +60,13 @@ COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=builder   /app/dist          ./dist
 COPY package.json ./
 
+# Pre-create the uploads directory owned by the `node` user. This is the
+# mount point of the named Docker volume in docker-compose; without this
+# the volume would be created as root:root and the runtime would crash
+# trying to persist licence/insurance/avatar files.
+RUN mkdir -p /app/uploads/licenses /app/uploads/insurance /app/uploads/avatars \
+ && chown -R node:node /app/uploads
+
 EXPOSE 3001
 
 USER node

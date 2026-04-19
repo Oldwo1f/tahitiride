@@ -21,4 +21,14 @@ export class WalletController {
       limit ? parseInt(limit, 10) : 50,
     );
   }
+
+  @Get('deposit-info')
+  getDepositInfo() {
+    return this.wallet.getDepositInfo();
+  }
+
+  @Get('limits')
+  getLimits() {
+    return this.wallet.getLimits();
+  }
 }

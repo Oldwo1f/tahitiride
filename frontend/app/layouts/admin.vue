@@ -5,11 +5,15 @@ const auth = useAuthStore()
 const route = useRoute()
 const drawerOpen = ref(false)
 
+const walletRequests = useAdminWalletRequests()
+
 interface MenuEntry {
   label: string
   to: string
   icon: string
   match?: string[]
+  /** Optional reactive badge value (rendered when > 0). */
+  badge?: ComputedRef<number>
 }
 
 const menu = computed<MenuEntry[]>(() => [
@@ -27,6 +31,13 @@ const menu = computed<MenuEntry[]>(() => [
     match: ['/admin/wallets'],
   },
   {
+    label: 'Demandes wallet',
+    to: '/admin/wallet-requests',
+    icon: 'pi pi-arrow-right-arrow-left',
+    match: ['/admin/wallet-requests'],
+    badge: computed(() => walletRequests.pendingCount.value),
+  },
+  {
     label: 'Trajets',
     to: '/admin/trips',
     icon: 'pi pi-car',
@@ -37,6 +48,12 @@ const menu = computed<MenuEntry[]>(() => [
     to: '/admin/vehicles',
     icon: 'pi pi-truck',
     match: ['/admin/vehicles'],
+  },
+  {
+    label: 'Certifications',
+    to: '/admin/certifications',
+    icon: 'pi pi-verified',
+    match: ['/admin/certifications'],
   },
   {
     label: 'Paramètres',
@@ -51,6 +68,10 @@ const menu = computed<MenuEntry[]>(() => [
     match: ['/admin/audit'],
   },
 ])
+
+function badgeOf(entry: MenuEntry): number {
+  return entry.badge ? entry.badge.value : 0
+}
 
 function isActive(entry: MenuEntry): boolean {
   if (entry.to === '/admin') return route.path === '/admin'
@@ -93,6 +114,12 @@ watch(
         >
           <i :class="entry.icon" />
           <span>{{ entry.label }}</span>
+          <Badge
+            v-if="badgeOf(entry) > 0"
+            :value="badgeOf(entry)"
+            severity="warn"
+            class="admin-link-badge"
+          />
         </NuxtLink>
       </nav>
       <div class="admin-footer">
@@ -152,6 +179,12 @@ watch(
         >
           <i :class="entry.icon" />
           <span>{{ entry.label }}</span>
+          <Badge
+            v-if="badgeOf(entry) > 0"
+            :value="badgeOf(entry)"
+            severity="warn"
+            class="admin-link-badge"
+          />
         </NuxtLink>
       </nav>
       <div class="admin-footer">
@@ -242,6 +275,9 @@ watch(
 }
 .admin-link-active:hover {
   background: var(--p-primary-color);
+}
+.admin-link-badge {
+  margin-left: auto;
 }
 
 .admin-footer {

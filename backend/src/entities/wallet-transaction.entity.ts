@@ -10,6 +10,7 @@ import {
 import { WalletTransactionType } from '../common/types/direction.enum';
 import { Trip } from './trip.entity';
 import { User } from './user.entity';
+import { WalletRequest } from './wallet-request.entity';
 
 @Entity('wallet_transactions')
 @Index(['trip_id', 'type', 'user_id'], {
@@ -59,6 +60,19 @@ export class WalletTransaction {
   @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'actor_user_id' })
   actor!: User | null;
+
+  /**
+   * Set when this transaction was created by the admin approving a
+   * `wallet_requests` row (deposit credit or payout debit). Null for
+   * trip settlements and direct admin adjustments.
+   */
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  wallet_request_id!: string | null;
+
+  @ManyToOne(() => WalletRequest, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'wallet_request_id' })
+  wallet_request!: WalletRequest | null;
 
   @CreateDateColumn()
   created_at!: Date;

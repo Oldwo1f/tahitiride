@@ -43,8 +43,9 @@ services:
 
       MAPBOX_TOKEN: ${MAPBOX_TOKEN:-}
 
-      FARE_BASE_XPF:              ${FARE_BASE_XPF:-200}
+      FARE_BASE_XPF:              ${FARE_BASE_XPF:-0}
       FARE_PER_KM_XPF:            ${FARE_PER_KM_XPF:-100}
+      APP_MARGIN_PER_KM_XPF:      ${APP_MARGIN_PER_KM_XPF:-0}
       INITIAL_WALLET_BALANCE_XPF: ${INITIAL_WALLET_BALANCE_XPF:-10000}
 
       # CORS allowed origin = the frontend public domain (with https://)
@@ -60,6 +61,18 @@ services:
       BOOTSTRAP_ADMIN_EMAIL:    ${BOOTSTRAP_ADMIN_EMAIL:-}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
       BOOTSTRAP_ADMIN_NAME:     ${BOOTSTRAP_ADMIN_NAME:-Administrator}
+
+      # Certifications: persistent file storage and OCR provider config.
+      # Uploaded licences / insurance vignettes / avatars live under
+      # /app/uploads inside the container, mapped to a named volume so
+      # they survive container rebuilds.
+      UPLOAD_DIR: /app/uploads
+      OPENAI_API_KEY:                ${OPENAI_API_KEY:-}
+      OPENAI_VISION_MODEL:           ${OPENAI_VISION_MODEL:-gpt-4o-mini}
+      OCR_NAME_SIMILARITY_THRESHOLD: ${OCR_NAME_SIMILARITY_THRESHOLD:-0.85}
+      OCR_MIN_CONFIDENCE:            ${OCR_MIN_CONFIDENCE:-0.8}
+    volumes:
+      - uploads:/app/uploads
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
       interval: 10s
@@ -111,6 +124,7 @@ services:
 
 volumes:
   pgdata:
+  uploads:
 
 networks:
   tahiti_net:

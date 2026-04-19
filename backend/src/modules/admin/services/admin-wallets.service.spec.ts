@@ -30,9 +30,11 @@ describe('AdminWalletsService.adjust', () => {
     savedWallets = [];
 
     const userRepo = {
-      findOne: jest.fn().mockImplementation(({ where }: { where: { id: string } }) =>
-        Promise.resolve(where.id === userId ? user : null),
-      ),
+      findOne: jest
+        .fn()
+        .mockImplementation(({ where }: { where: { id: string } }) =>
+          Promise.resolve(where.id === userId ? user : null),
+        ),
     };
     const walletQb = {
       setLock: jest.fn().mockReturnThis(),

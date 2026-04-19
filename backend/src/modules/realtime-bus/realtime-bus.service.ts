@@ -23,4 +23,18 @@ export class RealtimeBus {
     const rooms = userIds.map((id) => `user:${id}`);
     this.server.to(rooms).emit(event, payload);
   }
+
+  /**
+   * Emit to every connected client whose JWT carried the given role.
+   * Clients join their `role:<role>` room automatically in
+   * `RealtimeGateway.handleConnection`. Used for fan-out to all admins
+   * (e.g. badge updates, new wallet request notifications).
+   */
+  emitToRole(role: string, event: string, payload: unknown): void {
+    if (!this.server) {
+      this.logger.warn(`emitToRole called before server init (${event})`);
+      return;
+    }
+    this.server.to(`role:${role}`).emit(event, payload);
+  }
 }
