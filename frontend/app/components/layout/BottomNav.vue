@@ -1,12 +1,22 @@
 <script setup lang="ts">
 const items = computed(() => [
   { to: '/map', label: 'Carte', icon: 'pi pi-map' },
-  { to: '/scan', label: 'Scanner', icon: 'pi pi-qrcode' },
-  { to: '/wallet', label: 'Portefeuille', icon: 'pi pi-wallet' },
+  { to: '/trips', label: 'Trajets', icon: 'pi pi-history' },
+  { to: '/scan', label: 'QR', icon: 'pi pi-qrcode' },
+  { to: '/wallet', label: 'Solde', icon: 'pi pi-wallet' },
   { to: '/profile', label: 'Profil', icon: 'pi pi-user' },
 ])
 const route = useRoute()
-const isActive = (to: string) => route.path === to || route.path.startsWith(to + '/')
+const isActive = (to: string) => {
+  if (to === '/trips') {
+    return (
+      route.path === '/trips' ||
+      route.path.startsWith('/trips/') ||
+      route.path.startsWith('/trip/')
+    )
+  }
+  return route.path === to || route.path.startsWith(to + '/')
+}
 </script>
 
 <template>

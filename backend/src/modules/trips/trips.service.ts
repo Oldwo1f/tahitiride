@@ -19,7 +19,12 @@ import { PricingService } from '../pricing/pricing.service';
 import { QrService } from '../qr/qr.service';
 import { RealtimeBus } from '../realtime-bus/realtime-bus.service';
 import { WalletService } from '../wallet/wallet.service';
+import type {
+  EstimateDto,
+  EstimateResponseDto,
+} from './dto/estimate.dto';
 import type { DropoffDto, PickupDto } from './dto/pickup.dto';
+import type { TripSummaryDto } from './dto/trip-summary.dto';
 
 const toPoint = (p: PositionDto): Point => ({
   type: 'Point',
@@ -232,11 +237,52 @@ export class TripsService {
     return trip.id;
   }
 
-  async listMine(userId: string, limit = 20): Promise<Trip[]> {
-    return this.ds.getRepository(Trip).find({
+  /**
+   * Compute a passenger-facing estimate (distance, duration, fare) for a
+   * proposed trip from `from` to `to`. Used to inform the user up-front when
+   * they pick a destination on the map.
+   */
+  async estimate(dto: EstimateDto): Promise<EstimateResponseDto> {
+    const route = await this.mapbox.estimateRoute(
+      { lng: dto.from_lng, lat: dto.from_lat },
+      { lng: dto.to_lng, lat: dto.to_lat },
+    );
+    return {
+      distance_m: Math.round(route.distance_m),
+      duration_s: Math.round(route.duration_s),
+      fare_xpf: this.pricing.computeFare(route.distance_m),
+    };
+  }
+
+  async listMine(userId: string, limit = 20): Promise<TripSummaryDto[]> {
+    const trips = await this.trips.find({
       where: [{ passenger_id: userId }, { driver_id: userId }],
+      relations: { passenger: true, driver: true, vehicle: true },
       order: { started_at: 'DESC' },
       take: Math.min(limit, 100),
+    });
+
+    return trips.map<TripSummaryDto>((t) => {
+      const myRole: 'passenger' | 'driver' =
+        t.passenger_id === userId ? 'passenger' : 'driver';
+      const partner = myRole === 'passenger' ? t.driver : t.passenger;
+      return {
+        id: t.id,
+        passenger_id: t.passenger_id,
+        driver_id: t.driver_id,
+        vehicle_id: t.vehicle_id,
+        status: t.status,
+        started_at: t.started_at,
+        ended_at: t.ended_at,
+        distance_m: t.distance_m,
+        fare_xpf: t.fare_xpf,
+        my_role: myRole,
+        partner_id: partner?.id ?? (myRole === 'passenger' ? t.driver_id : t.passenger_id),
+        partner_name: partner?.full_name ?? 'Inconnu',
+        vehicle_plate: t.vehicle?.plate ?? null,
+        vehicle_model: t.vehicle?.model ?? null,
+        vehicle_color: t.vehicle?.color ?? null,
+      };
     });
   }
 }

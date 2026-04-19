@@ -64,6 +64,24 @@ export interface Trip {
   dropoff_token_jti: string | null
 }
 
+export interface TripSummary {
+  id: string
+  passenger_id: string
+  driver_id: string
+  vehicle_id: string
+  status: TripStatus
+  started_at: string
+  ended_at: string | null
+  distance_m: number | null
+  fare_xpf: number | null
+  my_role: 'passenger' | 'driver'
+  partner_id: string
+  partner_name: string
+  vehicle_plate: string | null
+  vehicle_model: string | null
+  vehicle_color: string | null
+}
+
 export interface TripStartedEvent {
   trip_id: string
   passenger_id: string
@@ -77,6 +95,12 @@ export interface TripCompletedEvent {
   distance_m: number | null
   fare_xpf: number | null
   ended_at: string
+}
+
+export interface TripEstimate {
+  distance_m: number
+  duration_s: number
+  fare_xpf: number
 }
 
 export interface WalletBalance {

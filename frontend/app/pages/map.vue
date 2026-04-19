@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { Direction, Trip, Vehicle } from '~/types/api'
-import { DESTINATION_GROUPS } from '~/utils/destinations'
+import type { Direction, Trip, TripEstimate, Vehicle } from '~/types/api'
+import { DESTINATION_GROUPS, getDestination } from '~/utils/destinations'
 import { useUiModeStore, type UiMode } from '~/stores/uiMode'
 
 definePageMeta({
@@ -17,21 +17,23 @@ const tripStore = useTripStore()
 const driversStore = useDriversStore()
 const passengersStore = usePassengersStore()
 const uiModeStore = useUiModeStore()
-const { suggestDirection } = useDirection()
+const { inferDirection } = useDirection()
 
 useLiveGeolocation()
 
-const mode = computed<UiMode>({
-  get: () => uiModeStore.mode,
-  set: (value) => uiModeStore.setMode(value),
-})
-const direction = ref<Direction>('city')
+const mode = computed<UiMode>(() => uiModeStore.mode)
 const destination = ref<string | null>(null)
 const passengerWaiting = ref(false)
 const driverOnline = ref(false)
 const vehicles = ref<Vehicle[]>([])
 const activeTrip = ref<Trip | null>(null)
 const pickMode = ref(false)
+
+const estimate = ref<TripEstimate | null>(null)
+const estimateLoading = ref(false)
+const estimateError = ref<string | null>(null)
+let estimateAbort: AbortController | null = null
+let estimateDebounce: ReturnType<typeof setTimeout> | null = null
 
 async function loadVehicles() {
   if (!auth.isDriver) return
@@ -53,17 +55,23 @@ async function loadActiveTrip() {
 
 const effective = computed(() => geoStore.effective)
 
-const suggestion = computed<Direction | null>(() => {
-  if (!effective.value) return null
-  return suggestDirection({
-    lng: effective.value.lng,
-    lat: effective.value.lat,
-    heading: effective.value.heading,
-  })
+const destinationCoords = computed(() => {
+  const d = getDestination(destination.value)
+  return d ? { lng: d.lng, lat: d.lat } : null
 })
 
-watch(suggestion, (s, prev) => {
-  if (s && !prev) direction.value = s
+/**
+ * Direction is now inferred deterministically from the rider's current
+ * position and the chosen destination relative to Papeete (see
+ * `useDirection`). When either is missing we default to `city`, matching
+ * the previous default behaviour, so backend matching never sees `null`.
+ */
+const direction = computed<Direction>(() => {
+  if (!effective.value || !destinationCoords.value) return 'city'
+  return inferDirection({
+    from: { lng: effective.value.lng, lat: effective.value.lat },
+    to: destinationCoords.value,
+  })
 })
 
 watch(
@@ -140,10 +148,11 @@ async function togglePassengerWait() {
       lat: effective.value.lat,
     })
     passengerWaiting.value = true
+    const dest = getDestination(destination.value)
     toast.add({
       severity: 'info',
       summary: 'En attente',
-      detail: `Direction: ${direction.value === 'city' ? 'ville' : 'campagne'}`,
+      detail: dest ? `Destination : ${dest.label}` : undefined,
       life: 2500,
     })
   }
@@ -296,6 +305,84 @@ function resyncRealtimeState() {
   }
 }
 
+/**
+ * Fetch a passenger-facing distance/duration/fare estimate as soon as the
+ * user picks a destination. We debounce to avoid hammering the API when
+ * the GPS fix wiggles, and abort in-flight requests on rapid changes.
+ */
+async function refreshEstimate(): Promise<void> {
+  if (estimateAbort) {
+    estimateAbort.abort()
+    estimateAbort = null
+  }
+  if (
+    mode.value !== 'passenger' ||
+    !effective.value ||
+    !destinationCoords.value
+  ) {
+    estimate.value = null
+    estimateError.value = null
+    estimateLoading.value = false
+    return
+  }
+  const controller = new AbortController()
+  estimateAbort = controller
+  estimateLoading.value = true
+  estimateError.value = null
+  try {
+    const result = await api<TripEstimate>('/api/trips/estimate', {
+      method: 'POST',
+      body: {
+        from_lng: effective.value.lng,
+        from_lat: effective.value.lat,
+        to_lng: destinationCoords.value.lng,
+        to_lat: destinationCoords.value.lat,
+      },
+      signal: controller.signal,
+    })
+    if (controller.signal.aborted) return
+    estimate.value = result
+  } catch (e: unknown) {
+    if (controller.signal.aborted) return
+    estimate.value = null
+    estimateError.value =
+      (e as { data?: { message?: string } })?.data?.message ||
+      (e as { message?: string })?.message ||
+      'Estimation indisponible'
+  } finally {
+    if (estimateAbort === controller) estimateAbort = null
+    estimateLoading.value = false
+  }
+}
+
+function scheduleEstimate(): void {
+  if (estimateDebounce) clearTimeout(estimateDebounce)
+  estimateDebounce = setTimeout(() => {
+    estimateDebounce = null
+    void refreshEstimate()
+  }, 250)
+}
+
+watch([destination, effective, mode], scheduleEstimate, { immediate: true })
+
+const estimateDistanceLabel = computed(() => {
+  if (!estimate.value) return null
+  const m = estimate.value.distance_m
+  if (m < 1000) return `${Math.round(m)} m`
+  return `${(m / 1000).toFixed(1)} km`
+})
+
+const estimateDurationLabel = computed(() => {
+  if (!estimate.value) return null
+  const s = estimate.value.duration_s
+  if (s < 60) return `${s} s`
+  const min = Math.round(s / 60)
+  if (min < 60) return `${min} min`
+  const h = Math.floor(min / 60)
+  const r = min % 60
+  return `${h} h ${String(r).padStart(2, '0')}`
+})
+
 onMounted(async () => {
   await Promise.all([loadVehicles(), loadActiveTrip()])
   socket.on('connect', resyncRealtimeState)
@@ -303,54 +390,18 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   socket.off('connect', resyncRealtimeState)
+  if (estimateDebounce) clearTimeout(estimateDebounce)
+  if (estimateAbort) estimateAbort.abort()
 })
 </script>
 
 <template>
   <div class="map-page">
     <div class="map-controls safe-top">
-      <div class="top-row">
-        <SelectButton
-          v-if="auth.user?.role === 'both'"
-          v-model="mode"
-          :options="[
-            { label: 'Passager', value: 'passenger' },
-            { label: 'Conducteur', value: 'driver' },
-          ]"
-          option-label="label"
-          option-value="value"
-          size="small"
-        />
+      <div v-if="geoStore.accuracyLabel" class="top-row">
         <Tag
-          v-else
-          :value="mode === 'passenger' ? 'Passager' : 'Conducteur'"
-          severity="secondary"
-        />
-        <Tag
-          v-if="geoStore.accuracyLabel"
           :value="geoStore.accuracyLabel"
           :severity="geoStore.accuracySeverity"
-        />
-      </div>
-
-      <div class="direction-row">
-        <span class="label">Direction :</span>
-        <SelectButton
-          v-model="direction"
-          :options="[
-            { label: 'Ville', value: 'city' },
-            { label: 'Campagne', value: 'country' },
-          ]"
-          option-label="label"
-          option-value="value"
-          size="small"
-        />
-        <Button
-          v-if="suggestion && suggestion !== direction"
-          text
-          size="small"
-          :label="`Suggestion: ${suggestion === 'city' ? 'Ville' : 'Campagne'}`"
-          @click="direction = suggestion"
         />
       </div>
 
@@ -368,6 +419,35 @@ onBeforeUnmount(() => {
           show-clear
           fluid
         />
+      </div>
+
+      <div
+        v-if="mode === 'passenger' && destination"
+        class="estimate-row"
+        aria-live="polite"
+      >
+        <template v-if="estimateLoading && !estimate">
+          <i class="pi pi-spin pi-spinner" />
+          <span class="tr-subtle">Estimation en cours…</span>
+        </template>
+        <template v-else-if="estimateError">
+          <i class="pi pi-exclamation-triangle est-warn" />
+          <span class="tr-subtle">{{ estimateError }}</span>
+        </template>
+        <template v-else-if="estimate">
+          <span class="est-cell" title="Distance estimée">
+            <i class="pi pi-compass" />
+            <span>{{ estimateDistanceLabel }}</span>
+          </span>
+          <span class="est-cell" title="Durée estimée">
+            <i class="pi pi-clock" />
+            <span>{{ estimateDurationLabel }}</span>
+          </span>
+          <span class="est-cell est-fare" title="Prix estimé">
+            <i class="pi pi-money-bill" />
+            <span>{{ estimate.fare_xpf }} XPF</span>
+          </span>
+        </template>
       </div>
     </div>
 
@@ -484,15 +564,33 @@ onBeforeUnmount(() => {
   gap: 0.5rem;
   flex-wrap: wrap;
 }
-.direction-row {
+.estimate-row {
   display: flex;
   align-items: center;
+  justify-content: space-around;
   gap: 0.5rem;
   flex-wrap: wrap;
+  padding: 0.4rem 0.5rem;
+  border-radius: 8px;
+  background: var(--p-surface-100);
+  font-size: 0.875rem;
 }
-.direction-row .label {
-  font-size: 0.85rem;
-  color: var(--p-text-muted-color);
+.p-dark .estimate-row {
+  background: var(--p-surface-800);
+}
+.estimate-row i {
+  margin-right: 0.3rem;
+}
+.estimate-row .est-cell {
+  display: inline-flex;
+  align-items: center;
+}
+.estimate-row .est-fare {
+  font-weight: 600;
+  color: var(--p-primary-color);
+}
+.estimate-row .est-warn {
+  color: var(--p-orange-500);
 }
 .destination-row {
   display: flex;

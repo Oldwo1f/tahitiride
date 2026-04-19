@@ -2,40 +2,48 @@ import type { Direction } from '~/types/api'
 
 const PAPEETE = { lng: -149.5665, lat: -17.5516 }
 
-export function useDirection() {
-  function bearingToPapeete(from: { lng: number; lat: number }): number {
-    const toRad = (d: number) => (d * Math.PI) / 180
-    const toDeg = (r: number) => (r * 180) / Math.PI
-    const lat1 = toRad(from.lat)
-    const lat2 = toRad(PAPEETE.lat)
-    const dLon = toRad(PAPEETE.lng - from.lng)
-    const y = Math.sin(dLon) * Math.cos(lat2)
-    const x =
-      Math.cos(lat1) * Math.sin(lat2) -
-      Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon)
-    const brng = toDeg(Math.atan2(y, x))
-    return (brng + 360) % 360
-  }
+interface LngLat {
+  lng: number
+  lat: number
+}
 
-  function suggestDirection(params: {
-    lng: number
-    lat: number
-    heading: number | null
-  }): Direction {
-    if (params.heading === null) return 'city'
-    const targetBearing = bearingToPapeete({
-      lng: params.lng,
-      lat: params.lat,
-    })
-    const diff = Math.abs(
-      ((params.heading - targetBearing + 540) % 360) - 180,
-    )
-    return diff <= 90 ? 'city' : 'country'
+function toRad(d: number): number {
+  return (d * Math.PI) / 180
+}
+
+function haversine(a: LngLat, b: LngLat): number {
+  const R = 6371000
+  const dLat = toRad(b.lat - a.lat)
+  const dLon = toRad(b.lng - a.lng)
+  const lat1 = toRad(a.lat)
+  const lat2 = toRad(b.lat)
+  const x =
+    Math.sin(dLat / 2) ** 2 +
+    Math.sin(dLon / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2)
+  return 2 * R * Math.asin(Math.sqrt(x))
+}
+
+export function useDirection() {
+  /**
+   * Infer the categorical trip direction from the rider position and the
+   * chosen destination, relative to Papeete (the reference urban hub):
+   *
+   *   - destination strictly closer to Papeete than the current position
+   *     -> 'city' (we are heading inwards),
+   *   - otherwise (further or equal) -> 'country' (we are heading out).
+   *
+   * This makes the choice deterministic and removes the need for a manual
+   * toggle in the UI.
+   */
+  function inferDirection(params: { from: LngLat; to: LngLat }): Direction {
+    const fromDist = haversine(params.from, PAPEETE)
+    const toDist = haversine(params.to, PAPEETE)
+    return toDist < fromDist ? 'city' : 'country'
   }
 
   return {
     PAPEETE,
-    bearingToPapeete,
-    suggestDirection,
+    haversine,
+    inferDirection,
   }
 }

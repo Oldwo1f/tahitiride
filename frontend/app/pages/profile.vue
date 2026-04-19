@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Vehicle } from '~/types/api'
+import { useUiModeStore, type UiMode } from '~/stores/uiMode'
 
 definePageMeta({
   middleware: ['auth'],
@@ -9,6 +10,12 @@ const auth = useAuth()
 const api = useApi()
 const toast = useToast()
 const confirm = useConfirm()
+const uiModeStore = useUiModeStore()
+
+const mode = computed<UiMode>({
+  get: () => uiModeStore.mode,
+  set: (value) => uiModeStore.setMode(value),
+})
 
 const vehicles = ref<Vehicle[]>([])
 const loading = ref(true)
@@ -128,6 +135,23 @@ onMounted(loadVehicles)
             <div>{{ auth.user.phone }}</div>
           </div>
         </div>
+
+        <div v-if="uiModeStore.canToggle" class="mode-row">
+          <div class="tr-subtle mode-label">Mode actif</div>
+          <SelectButton
+            v-model="mode"
+            :options="[
+              { label: 'Passager', value: 'passenger' },
+              { label: 'Conducteur', value: 'driver' },
+            ]"
+            option-label="label"
+            option-value="value"
+            :allow-empty="false"
+          />
+          <p class="tr-subtle mode-hint">
+            Choisis comment tu apparais dans l'application. Tu peux changer à tout moment.
+          </p>
+        </div>
       </template>
     </Card>
 
@@ -221,6 +245,24 @@ onMounted(loadVehicles)
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
+}
+.mode-row {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--p-surface-200);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.p-dark .mode-row {
+  border-top-color: var(--p-surface-700);
+}
+.mode-label {
+  font-size: 0.85rem;
+}
+.mode-hint {
+  font-size: 0.8rem;
+  margin: 0;
 }
 .title-row {
   display: flex;

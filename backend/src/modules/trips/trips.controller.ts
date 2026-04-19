@@ -11,6 +11,7 @@ import {
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { EstimateDto } from './dto/estimate.dto';
 import { DropoffDto, PickupDto } from './dto/pickup.dto';
 import { TripsService } from './trips.service';
 
@@ -18,6 +19,11 @@ import { TripsService } from './trips.service';
 @UseGuards(JwtAuthGuard)
 export class TripsController {
   constructor(private readonly trips: TripsService) {}
+
+  @Post('estimate')
+  estimate(@Body() dto: EstimateDto) {
+    return this.trips.estimate(dto);
+  }
 
   @Post('pickup')
   pickup(@CurrentUser() user: AuthUser, @Body() dto: PickupDto) {

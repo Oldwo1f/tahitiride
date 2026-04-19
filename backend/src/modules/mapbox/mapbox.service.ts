@@ -17,6 +17,19 @@ interface MapMatchingResponse {
   }>;
 }
 
+interface DirectionsResponse {
+  code: string;
+  routes?: Array<{
+    distance: number;
+    duration: number;
+  }>;
+}
+
+export interface RouteEstimate {
+  distance_m: number;
+  duration_s: number;
+}
+
 @Injectable()
 export class MapboxService {
   private readonly logger = new Logger(MapboxService.name);
@@ -25,6 +38,56 @@ export class MapboxService {
     private readonly http: HttpService,
     private readonly config: ConfigService,
   ) {}
+
+  /**
+   * Estimate the driving route between two points. Uses Mapbox Directions
+   * when a token is available, otherwise falls back to a great-circle
+   * distance combined with a conservative average urban driving speed.
+   */
+  async estimateRoute(from: GeoPoint, to: GeoPoint): Promise<RouteEstimate> {
+    const token = this.config.get<string>('mapbox.token');
+    if (!token) {
+      const dist = this.haversine(from, to);
+      return { distance_m: dist, duration_s: this.fallbackDuration(dist) };
+    }
+    try {
+      const coords = `${from.lng.toFixed(6)},${from.lat.toFixed(6)};${to.lng.toFixed(6)},${to.lat.toFixed(6)}`;
+      const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coords}`;
+      const { data } = await firstValueFrom(
+        this.http.get<DirectionsResponse>(url, {
+          params: {
+            access_token: token,
+            overview: 'false',
+            geometries: 'polyline',
+          },
+          timeout: 8000,
+        }),
+      );
+      if (data.code !== 'Ok' || !data.routes?.length) {
+        throw new Error(`Mapbox Directions code=${data.code}`);
+      }
+      const route = data.routes[0];
+      return {
+        distance_m: route.distance,
+        duration_s: route.duration,
+      };
+    } catch (err) {
+      this.logger.warn(
+        `Directions API failed, falling back to Haversine: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      const dist = this.haversine(from, to);
+      return { distance_m: dist, duration_s: this.fallbackDuration(dist) };
+    }
+  }
+
+  /** Conservative average driving speed used when Mapbox is unavailable. */
+  private fallbackDuration(distanceMeters: number): number {
+    const avgSpeedKmh = 40;
+    const hours = distanceMeters / 1000 / avgSpeedKmh;
+    return Math.round(hours * 3600);
+  }
 
   async computeDistanceMeters(points: GeoPoint[]): Promise<number> {
     if (points.length < 2) return 0;
