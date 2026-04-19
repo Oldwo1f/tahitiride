@@ -71,6 +71,8 @@ function toDriversGeoJson(): FeatureCollection<
       properties: {
         user_id: d.user_id,
         plate: d.plate,
+        model: d.model,
+        color: d.color,
         direction: d.direction,
         destination_key: d.destination ?? null,
         destination_label: getDestinationLabel(d.destination),
@@ -136,9 +138,46 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;')
 }
 
+/**
+ * Best-effort mapping of common French color names to a CSS color, so we can
+ * render a small swatch next to the textual label. Falls back to gray when
+ * the label isn't recognised — the text label is always shown so meaning
+ * isn't lost.
+ */
+const COLOR_SWATCHES: Record<string, string> = {
+  blanc: '#f8fafc',
+  blanche: '#f8fafc',
+  noir: '#111827',
+  noire: '#111827',
+  gris: '#9ca3af',
+  grise: '#9ca3af',
+  argent: '#cbd5e1',
+  argenté: '#cbd5e1',
+  rouge: '#ef4444',
+  bordeaux: '#7f1d1d',
+  bleu: '#3b82f6',
+  bleue: '#3b82f6',
+  vert: '#22c55e',
+  verte: '#22c55e',
+  jaune: '#facc15',
+  orange: '#f97316',
+  marron: '#92400e',
+  beige: '#e7d6b9',
+  violet: '#8b5cf6',
+  violette: '#8b5cf6',
+  rose: '#ec4899',
+}
+
+function colorSwatch(color: string | null): string | null {
+  if (!color) return null
+  const key = color.trim().toLowerCase()
+  return COLOR_SWATCHES[key] ?? null
+}
+
 function buildPopupHtml(params: {
   title: string
   subtitle?: string | null
+  swatch?: string | null
   destination: string | null
   direction: string | null
 }): string {
@@ -153,10 +192,13 @@ function buildPopupHtml(params: {
     `<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(params.title)}</div>`,
   )
   if (params.subtitle) {
+    const swatchHtml = params.swatch
+      ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${params.swatch};border:1px solid rgba(0,0,0,0.15);margin-right:6px;vertical-align:middle;"></span>`
+      : ''
     lines.push(
-      `<div style="font-size:0.8rem;color:#64748b;margin-bottom:4px;">${escapeHtml(
+      `<div style="font-size:0.8rem;color:#64748b;margin-bottom:4px;display:flex;align-items:center;">${swatchHtml}<span>${escapeHtml(
         params.subtitle,
-      )}</div>`,
+      )}</span></div>`,
     )
   }
   lines.push(
@@ -195,8 +237,24 @@ async function showPopupAt(
         : 'Voiture'
       : 'Passager'
 
+  let subtitle: string | null = null
+  let swatch: string | null = null
+  if (kind === 'driver') {
+    const model =
+      typeof props_.model === 'string' && props_.model ? props_.model : null
+    const color =
+      typeof props_.color === 'string' && props_.color ? props_.color : null
+    const parts: string[] = []
+    if (model) parts.push(model)
+    if (color) parts.push(color)
+    subtitle = parts.length > 0 ? parts.join(' · ') : null
+    swatch = colorSwatch(color)
+  }
+
   const html = buildPopupHtml({
     title,
+    subtitle,
+    swatch,
     destination,
     direction,
   })

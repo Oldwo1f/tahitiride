@@ -96,3 +96,34 @@ button {
 .mapboxgl-marker {
   cursor: pointer;
 }
+
+/*
+ * Mobile-friendly overrides for PrimeVue overlays. By default, the Toast and
+ * Dialog widgets use fixed widths (~25rem / ~30rem) that overflow narrow
+ * viewports. We constrain them to the viewport while preserving the desktop
+ * sizing on larger screens, and ensure long copy wraps instead of pushing the
+ * layout outwards.
+ */
+.p-toast {
+  width: min(380px, calc(100vw - 1.5rem));
+  max-width: calc(100vw - 1.5rem);
+}
+.p-toast .p-toast-message-text,
+.p-toast .p-toast-summary,
+.p-toast .p-toast-detail {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.p-dialog {
+  max-width: calc(100vw - 1rem);
+}
+.p-dialog .p-dialog-content,
+.p-dialog .p-dialog-header,
+.p-dialog .p-dialog-footer {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.p-confirmdialog {
+  width: min(420px, calc(100vw - 1rem));
+}

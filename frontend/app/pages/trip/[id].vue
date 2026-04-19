@@ -92,8 +92,21 @@ onMounted(load)
               </div>
             </div>
             <div>
-              <div class="tr-subtle">Montant</div>
-              <div class="val">{{ trip.fare_xpf ?? 0 }} XPF</div>
+              <div class="tr-subtle">
+                {{ role === 'driver' ? 'Encaissé' : 'Payé' }}
+              </div>
+              <div class="val">
+                {{ role === 'driver'
+                  ? (trip.driver_share_xpf ?? 0)
+                  : (trip.fare_xpf ?? 0)
+                }} XPF
+              </div>
+              <div
+                v-if="role === 'driver' && trip.fare_xpf != null && trip.driver_share_xpf != null && trip.fare_xpf > trip.driver_share_xpf"
+                class="tr-subtle fee-hint"
+              >
+                Frais plateforme : {{ trip.fare_xpf - trip.driver_share_xpf }} XPF
+              </div>
             </div>
             <div>
               <div class="tr-subtle">Début</div>
@@ -143,5 +156,9 @@ onMounted(load)
 .summary-grid .val {
   font-size: 1.25rem;
   font-weight: 600;
+}
+.fee-hint {
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
 }
 </style>

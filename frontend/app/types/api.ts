@@ -34,6 +34,8 @@ export interface NearbyDriver {
   user_id: string
   vehicle_id: string | null
   plate: string | null
+  model: string | null
+  color: string | null
   direction: Direction
   destination: string | null
   lng: number
@@ -59,7 +61,10 @@ export interface Trip {
   started_at: string
   ended_at: string | null
   distance_m: number | null
+  /** Total amount the passenger paid for this trip. */
   fare_xpf: number | null
+  /** Portion of `fare_xpf` actually credited to the driver (excluding the platform booking fee). */
+  driver_share_xpf: number | null
   pickup_token_jti: string
   dropoff_token_jti: string | null
 }
@@ -74,6 +79,7 @@ export interface TripSummary {
   ended_at: string | null
   distance_m: number | null
   fare_xpf: number | null
+  driver_share_xpf: number | null
   my_role: 'passenger' | 'driver'
   partner_id: string
   partner_name: string

@@ -167,14 +167,21 @@ export class TripsService {
     const points = await this.locations.getTripPoints(tripId);
     const distance = await this.mapbox.computeDistanceMeters(points);
     const fare = this.pricing.computeFare(distance);
+    const driverShare = this.pricing.computeDriverShare(distance);
 
-    let settled: { debited: number; remaining: number } | null = null;
+    let settled: {
+      debited: number;
+      driverCredited: number;
+      platformMargin: number;
+      remaining: number;
+    } | null = null;
     try {
       settled = await this.wallet.settleTrip({
         tripId,
         passengerId,
         driverId: trip.driver_id,
         fareXpf: fare,
+        driverShareXpf: driverShare,
       });
     } catch (err) {
       this.logger.error(
@@ -189,6 +196,7 @@ export class TripsService {
     trip.end_point = toPoint(dropoffPos);
     trip.distance_m = distance;
     trip.fare_xpf = settled?.debited ?? fare;
+    trip.driver_share_xpf = settled?.driverCredited ?? driverShare;
     // Per-scan unique id (also satisfies the partial UNIQUE INDEX on the
     // column).
     trip.dropoff_token_jti = uuidv4();
@@ -276,6 +284,7 @@ export class TripsService {
         ended_at: t.ended_at,
         distance_m: t.distance_m,
         fare_xpf: t.fare_xpf,
+        driver_share_xpf: t.driver_share_xpf,
         my_role: myRole,
         partner_id: partner?.id ?? (myRole === 'passenger' ? t.driver_id : t.passenger_id),
         partner_name: partner?.full_name ?? 'Inconnu',

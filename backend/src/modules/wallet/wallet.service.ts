@@ -27,15 +27,32 @@ export class WalletService {
     });
   }
 
+  /**
+   * Move money for a completed trip:
+   *   - debit the passenger up to `fareXpf` (capped at their available
+   *     balance, no overdraft),
+   *   - credit the driver their `driverShareXpf` share, capped at what was
+   *     actually collected from the passenger,
+   *   - the remainder (fare minus driver share) is the platform margin —
+   *     it stays out of any user wallet by design.
+   *
+   * The driver is paid in priority over the platform margin: if the
+   * passenger could not cover the full fare, what little they did pay is
+   * forwarded to the driver first; the platform absorbs the shortfall.
+   */
   async settleTrip(params: {
     tripId: string;
     passengerId: string;
     driverId: string;
     fareXpf: number;
+    driverShareXpf: number;
   }) {
-    const { tripId, passengerId, driverId, fareXpf } = params;
+    const { tripId, passengerId, driverId, fareXpf, driverShareXpf } = params;
     if (fareXpf <= 0) {
       throw new BadRequestException('Invalid fare');
+    }
+    if (driverShareXpf < 0 || driverShareXpf > fareXpf) {
+      throw new BadRequestException('Invalid driver share');
     }
 
     return this.dataSource.transaction(async (tx) => {
@@ -58,28 +75,42 @@ export class WalletService {
       }
 
       const actualFare = Math.min(fareXpf, passengerWallet.balance_xpf);
+      const driverCredit = Math.min(driverShareXpf, actualFare);
+      const platformMargin = actualFare - driverCredit;
 
       passengerWallet.balance_xpf -= actualFare;
-      driverWallet.balance_xpf += actualFare;
+      driverWallet.balance_xpf += driverCredit;
       await walletRepo.save(passengerWallet);
-      await walletRepo.save(driverWallet);
+      if (driverCredit > 0) {
+        await walletRepo.save(driverWallet);
+      }
 
-      await txRepo.save([
+      const rows: WalletTransaction[] = [
         txRepo.create({
           user_id: passengerId,
           amount_xpf: -actualFare,
           type: WalletTransactionType.DEBIT,
           trip_id: tripId,
         }),
-        txRepo.create({
-          user_id: driverId,
-          amount_xpf: actualFare,
-          type: WalletTransactionType.CREDIT,
-          trip_id: tripId,
-        }),
-      ]);
+      ];
+      if (driverCredit > 0) {
+        rows.push(
+          txRepo.create({
+            user_id: driverId,
+            amount_xpf: driverCredit,
+            type: WalletTransactionType.CREDIT,
+            trip_id: tripId,
+          }),
+        );
+      }
+      await txRepo.save(rows);
 
-      return { debited: actualFare, remaining: passengerWallet.balance_xpf };
+      return {
+        debited: actualFare,
+        driverCredited: driverCredit,
+        platformMargin,
+        remaining: passengerWallet.balance_xpf,
+      };
     });
   }
 }

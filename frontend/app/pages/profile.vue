@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { Vehicle } from '~/types/api'
+import { usePreferencesStore } from '~/stores/preferences'
 import { useUiModeStore, type UiMode } from '~/stores/uiMode'
+import { DESTINATION_GROUPS } from '~/utils/destinations'
 
 definePageMeta({
   middleware: ['auth'],
@@ -11,10 +13,20 @@ const api = useApi()
 const toast = useToast()
 const confirm = useConfirm()
 const uiModeStore = useUiModeStore()
+const prefStore = usePreferencesStore()
 
 const mode = computed<UiMode>({
   get: () => uiModeStore.mode,
   set: (value) => uiModeStore.setMode(value),
+})
+
+const homeKey = computed<string | null>({
+  get: () => prefStore.home,
+  set: (value) => prefStore.setHome(value),
+})
+const workKey = computed<string | null>({
+  get: () => prefStore.work,
+  set: (value) => prefStore.setWork(value),
 })
 
 const vehicles = ref<Vehicle[]>([])
@@ -155,6 +167,52 @@ onMounted(loadVehicles)
       </template>
     </Card>
 
+    <Card>
+      <template #title>Destinations favorites</template>
+      <template #content>
+        <p class="tr-subtle fav-hint">
+          Configure des raccourcis Maison et Travail pour les retrouver
+          en haut de la carte. Stocké uniquement sur cet appareil.
+        </p>
+        <div class="fav-field">
+          <label for="fav-home">
+            <i class="pi pi-home" /> Maison
+          </label>
+          <Select
+            id="fav-home"
+            v-model="homeKey"
+            :options="DESTINATION_GROUPS"
+            option-group-label="label"
+            option-group-children="items"
+            option-label="label"
+            option-value="value"
+            placeholder="Aucune"
+            size="small"
+            show-clear
+            fluid
+          />
+        </div>
+        <div class="fav-field">
+          <label for="fav-work">
+            <i class="pi pi-briefcase" /> Travail
+          </label>
+          <Select
+            id="fav-work"
+            v-model="workKey"
+            :options="DESTINATION_GROUPS"
+            option-group-label="label"
+            option-group-children="items"
+            option-label="label"
+            option-value="value"
+            placeholder="Aucune"
+            size="small"
+            show-clear
+            fluid
+          />
+        </div>
+      </template>
+    </Card>
+
     <Card v-if="auth.isDriver">
       <template #title>
         <div class="title-row">
@@ -263,6 +321,25 @@ onMounted(loadVehicles)
 .mode-hint {
   font-size: 0.8rem;
   margin: 0;
+}
+.fav-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+}
+.fav-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+.fav-field:last-child {
+  margin-bottom: 0;
+}
+.fav-field label {
+  font-size: 0.875rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 .title-row {
   display: flex;

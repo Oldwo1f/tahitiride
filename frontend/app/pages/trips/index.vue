@@ -102,6 +102,16 @@ function statusLabel(s: TripSummary['status']): string {
   return 'Annulé'
 }
 
+/**
+ * Amount to surface in the trip row, depending on whether the user was
+ * paying (passenger -> what they paid) or earning (driver -> what they
+ * actually received, i.e. the fare minus the platform booking fee).
+ */
+function displayedAmount(t: TripSummary): number {
+  if (t.my_role === 'driver') return t.driver_share_xpf ?? 0
+  return t.fare_xpf ?? 0
+}
+
 function statusSeverity(
   s: TripSummary['status'],
 ): 'success' | 'warn' | 'secondary' {
@@ -239,7 +249,7 @@ onMounted(load)
                     <i class="pi pi-clock" /> {{ durationMinutes(t) }} min
                   </span>
                   <span class="amount" :class="{ debit: t.my_role === 'passenger', credit: t.my_role === 'driver' }">
-                    {{ t.my_role === 'passenger' ? '-' : '+' }}{{ t.fare_xpf ?? 0 }} XPF
+                    {{ t.my_role === 'passenger' ? '-' : '+' }}{{ displayedAmount(t) }} XPF
                   </span>
                 </div>
               </div>

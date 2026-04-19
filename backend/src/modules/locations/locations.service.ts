@@ -8,6 +8,8 @@ export interface NearbyDriver {
   full_name: string;
   vehicle_id: string | null;
   plate: string | null;
+  model: string | null;
+  color: string | null;
   direction: Direction;
   destination: string | null;
   lng: number;
@@ -262,6 +264,8 @@ export class LocationsService {
       full_name: string;
       vehicle_id: string | null;
       plate: string | null;
+      model: string | null;
+      color: string | null;
       direction: Direction;
       destination: string | null;
       lng: string;
@@ -270,7 +274,8 @@ export class LocationsService {
       speed: number | null;
       distance_m: string;
     }> = await this.ds.query(
-      `SELECT u.id AS user_id, u.full_name, ds.vehicle_id, v.plate,
+      `SELECT u.id AS user_id, u.full_name, ds.vehicle_id,
+              v.plate, v.model, v.color,
               ds.direction, ds.destination,
               ST_X(ds.current_position::geometry) AS lng,
               ST_Y(ds.current_position::geometry) AS lat,
@@ -289,6 +294,8 @@ export class LocationsService {
       full_name: r.full_name,
       vehicle_id: r.vehicle_id,
       plate: r.plate,
+      model: r.model,
+      color: r.color,
       direction: r.direction,
       destination: r.destination,
       lng: Number(r.lng),

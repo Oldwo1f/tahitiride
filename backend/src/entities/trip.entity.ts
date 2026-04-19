@@ -74,6 +74,15 @@ export class Trip {
   @Column({ type: 'integer', nullable: true })
   fare_xpf!: number | null;
 
+  /**
+   * Amount the driver actually receives for this trip. This is `fare_xpf`
+   * minus the platform margin (booking/base fee). Persisted so we can
+   * display "what was paid" vs "what was earned" in trip history without
+   * recomputing from pricing config.
+   */
+  @Column({ type: 'integer', nullable: true })
+  driver_share_xpf!: number | null;
+
   @Column({ type: 'varchar', length: 128 })
   pickup_token_jti!: string;
 

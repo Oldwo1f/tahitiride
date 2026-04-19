@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Direction, Trip, TripEstimate, Vehicle } from '~/types/api'
 import { DESTINATION_GROUPS, getDestination } from '~/utils/destinations'
+import { usePreferencesStore } from '~/stores/preferences'
 import { useUiModeStore, type UiMode } from '~/stores/uiMode'
 
 definePageMeta({
@@ -17,12 +18,27 @@ const tripStore = useTripStore()
 const driversStore = useDriversStore()
 const passengersStore = usePassengersStore()
 const uiModeStore = useUiModeStore()
+const prefStore = usePreferencesStore()
 const { inferDirection } = useDirection()
 
 useLiveGeolocation()
 
 const mode = computed<UiMode>(() => uiModeStore.mode)
-const destination = ref<string | null>(null)
+/**
+ * Bound to the persisted preference: any change here is mirrored back to
+ * localStorage via the store so the destination survives reloads.
+ */
+const destination = computed<string | null>({
+  get: () => prefStore.lastDestination,
+  set: (value) => prefStore.setLastDestination(value),
+})
+
+const homeLabel = computed(() => getDestination(prefStore.home)?.label ?? null)
+const workLabel = computed(() => getDestination(prefStore.work)?.label ?? null)
+function pickFavorite(key: string | null) {
+  if (!key) return
+  destination.value = key
+}
 const passengerWaiting = ref(false)
 const driverOnline = ref(false)
 const vehicles = ref<Vehicle[]>([])
@@ -398,10 +414,31 @@ onBeforeUnmount(() => {
 <template>
   <div class="map-page">
     <div class="map-controls safe-top">
-      <div v-if="geoStore.accuracyLabel" class="top-row">
-        <Tag
-          :value="geoStore.accuracyLabel"
-          :severity="geoStore.accuracySeverity"
+      <div
+        v-if="prefStore.hasFavorites"
+        class="favorites-row"
+        role="group"
+        aria-label="Destinations favorites"
+      >
+        <Button
+          v-if="prefStore.home"
+          :label="homeLabel ?? 'Maison'"
+          icon="pi pi-home"
+          size="small"
+          :severity="destination === prefStore.home ? 'primary' : 'secondary'"
+          :outlined="destination !== prefStore.home"
+          class="fav-btn"
+          @click="pickFavorite(prefStore.home)"
+        />
+        <Button
+          v-if="prefStore.work"
+          :label="workLabel ?? 'Travail'"
+          icon="pi pi-briefcase"
+          size="small"
+          :severity="destination === prefStore.work ? 'primary' : 'secondary'"
+          :outlined="destination !== prefStore.work"
+          class="fav-btn"
+          @click="pickFavorite(prefStore.work)"
         />
       </div>
 
@@ -557,12 +594,20 @@ onBeforeUnmount(() => {
   background: var(--p-surface-900);
   border-bottom-color: var(--p-surface-700);
 }
-.top-row {
+.favorites-row {
   display: flex;
-  align-items: center;
-  justify-content: center;
   gap: 0.5rem;
   flex-wrap: wrap;
+}
+.favorites-row .fav-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: center;
+}
+.favorites-row .fav-btn :deep(.p-button-label) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .estimate-row {
   display: flex;

@@ -15,6 +15,8 @@ export interface TripSummaryDto {
   ended_at: Date | null;
   distance_m: number | null;
   fare_xpf: number | null;
+  /** What the driver actually pocketed (fare minus platform margin). */
+  driver_share_xpf: number | null;
 
   /** Whether the current user was the passenger or the driver for this trip. */
   my_role: 'passenger' | 'driver';
