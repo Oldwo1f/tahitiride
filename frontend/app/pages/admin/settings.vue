@@ -22,10 +22,11 @@ async function load() {
     settings.value = await admin.get<AdminSetting[]>('/settings')
     const next: Record<string, number | string> = {}
     for (const s of settings.value) {
-      next[s.key] =
-        typeof s.value === 'number' || typeof s.value === 'string'
-          ? s.value
-          : 0
+      if (s.type === 'integer') {
+        next[s.key] = typeof s.value === 'number' ? s.value : 0
+      } else {
+        next[s.key] = typeof s.value === 'string' ? s.value : ''
+      }
     }
     drafts.value = next
   } catch (e: unknown) {
@@ -41,8 +42,13 @@ async function load() {
 onMounted(load)
 
 async function save(setting: AdminSetting) {
-  const value = drafts.value[setting.key]
-  if (value === undefined || value === null || value === '') {
+  const raw = drafts.value[setting.key]
+  if (raw === undefined || raw === null) {
+    toast.add({ severity: 'warn', summary: 'Valeur vide', life: 2500 })
+    return
+  }
+  const value = typeof raw === 'string' ? raw.trim() : raw
+  if (typeof value === 'string' && value.length === 0) {
     toast.add({ severity: 'warn', summary: 'Valeur vide', life: 2500 })
     return
   }
@@ -90,7 +96,12 @@ async function save(setting: AdminSetting) {
     </div>
 
     <div class="settings-grid">
-      <Card v-for="s in settings" :key="s.key" class="setting-card">
+      <Card
+        v-for="s in settings"
+        :key="s.key"
+        class="setting-card"
+        :class="{ 'setting-card-wide': s.type === 'string' && s.multiline }"
+      >
         <template #title>{{ s.label }}</template>
         <template #subtitle>
           <code>{{ s.key }}</code>
@@ -98,20 +109,39 @@ async function save(setting: AdminSetting) {
         <template #content>
           <div class="setting-body">
             <InputNumber
+              v-if="s.type === 'integer'"
               v-model="(drafts[s.key] as number)"
               :min="s.min"
               :max="s.max"
               :step="1"
               show-buttons
               button-layout="horizontal"
+              fluid
+            />
+            <Textarea
+              v-else-if="s.multiline"
+              v-model="(drafts[s.key] as string)"
+              :maxlength="s.maxLength"
+              rows="4"
+              auto-resize
+              fluid
+            />
+            <InputText
+              v-else
+              v-model="(drafts[s.key] as string)"
+              :maxlength="s.maxLength"
+              fluid
             />
             <div class="meta">
-              <div>
+              <div v-if="s.type === 'integer'">
                 Plage&nbsp;: {{ s.min }} – {{ s.max }}
+              </div>
+              <div v-else>
+                Longueur max&nbsp;: {{ s.maxLength }} caractères
               </div>
               <div>
                 Défaut&nbsp;:
-                <strong>{{ s.default }}</strong>
+                <strong>{{ s.default ?? '—' }}</strong>
               </div>
               <div v-if="s.override !== null">
                 Override actif&nbsp;: <strong>{{ s.override }}</strong>
@@ -158,6 +188,9 @@ async function save(setting: AdminSetting) {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 1rem;
+}
+.setting-card-wide {
+  grid-column: 1 / -1;
 }
 .setting-body {
   display: flex;

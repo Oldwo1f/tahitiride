@@ -1,4 +1,4 @@
-import { Module, Provider } from '@nestjs/common';
+import { Logger, Module, Provider } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Certification } from '../../entities/certification.entity';
@@ -25,10 +25,17 @@ const ocrProvider: Provider = {
   provide: OCR_PROVIDER,
   inject: [ConfigService],
   useFactory: (config: ConfigService) => {
+    const logger = new Logger('OcrProviderFactory');
     const key = config.get<string>('OPENAI_API_KEY');
     if (key && key.trim().length > 0) {
+      const model =
+        config.get<string>('OPENAI_VISION_MODEL') || 'gpt-4o-mini';
+      logger.log(`OCR provider: OpenAI Vision (${model})`);
       return new OpenAiVisionOcrProvider(config);
     }
+    logger.warn(
+      'OCR provider: stub (OPENAI_API_KEY missing) — every submission will be queued for manual review.',
+    );
     return new StubOcrProvider();
   },
 };
