@@ -7,6 +7,7 @@ export enum UserRole {
   PASSENGER = 'passenger',
   DRIVER = 'driver',
   BOTH = 'both',
+  ADMIN = 'admin',
 }
 
 export enum TripStatus {
@@ -19,4 +20,5 @@ export enum WalletTransactionType {
   INITIAL = 'initial',
   DEBIT = 'debit',
   CREDIT = 'credit',
+  ADJUSTMENT = 'adjustment',
 }

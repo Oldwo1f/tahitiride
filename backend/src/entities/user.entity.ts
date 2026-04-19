@@ -35,6 +35,12 @@ export class User {
   @CreateDateColumn()
   created_at!: Date;
 
+  @Column({ type: 'timestamptz', nullable: true })
+  suspended_at!: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  deleted_at!: Date | null;
+
   @OneToMany(() => Vehicle, (v) => v.user)
   vehicles!: Vehicle[];
 

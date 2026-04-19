@@ -53,6 +53,13 @@ services:
       PICKUP_MAX_DISTANCE_METERS:    ${PICKUP_MAX_DISTANCE_METERS:-50}
       DROPOFF_MIN_DELAY_SECONDS:     ${DROPOFF_MIN_DELAY_SECONDS:-30}
       NEARBY_DRIVERS_RADIUS_METERS:  ${NEARBY_DRIVERS_RADIUS_METERS:-3000}
+
+      # Admin bootstrap — optional. When BOOTSTRAP_ADMIN_EMAIL is set, the
+      # backend creates or promotes this account to admin on every boot
+      # (idempotent). Empty to opt out.
+      BOOTSTRAP_ADMIN_EMAIL:    ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+      BOOTSTRAP_ADMIN_NAME:     ${BOOTSTRAP_ADMIN_NAME:-Administrator}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
       interval: 10s

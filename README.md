@@ -102,6 +102,69 @@ Voir le [plan détaillé](.cursor/plans/) pour la conception complète.
 10. Tester installabilité PWA : DevTools → Application → Manifest, installer sur mobile Android (menu → « Installer l'application »).
 11. Test offline : désactiver le réseau, naviguer dans l'app shell → les pages s'ouvrent ; les appels API échouent proprement avec un message d'erreur (pas de stale cache).
 
+## Administration (back-office)
+
+L'app expose un back-office complet sur `/admin/*` (frontend) et `/api/admin/*` (backend), accessible aux comptes ayant `role = admin`. Couvre : tableau de bord (KPIs + graphiques), utilisateurs (suspension / soft-delete / changement de rôle), wallets (ajustements manuels avec motif), trajets (liste filtrable, replay carte, annulation), véhicules, paramètres applicatifs (overlay DB sur les variables d'environnement) et journal d'audit immuable.
+
+### Créer le premier admin
+
+Aucun admin n'est créé par défaut (sécurité : impossible de s'auto-attribuer ce rôle via `/api/auth/signup`). Deux mécanismes au choix :
+
+**A. Variables d'environnement (typique Docker, idempotent à chaque boot)**
+
+Dans `.env` :
+
+```bash
+BOOTSTRAP_ADMIN_EMAIL=admin@example.com
+BOOTSTRAP_ADMIN_PASSWORD=un-mot-de-passe-long-et-aleatoire
+BOOTSTRAP_ADMIN_NAME=Administrator
+```
+
+Puis `docker compose up -d backend` (ou `pnpm run start:dev` en local). Au boot, le backend :
+
+- Crée le compte si l'email n'existe pas (avec wallet à 0).
+- Promeut le compte existant en `admin` (et lève d'éventuels `suspended_at` / `deleted_at`) sinon.
+- Réinitialise le mot de passe **uniquement si** `BOOTSTRAP_ADMIN_PASSWORD` est non vide ET (compte nouveau OU password explicitement fourni).
+
+**B. CLI (one-shot, idéal pour ne pas laisser le password en env)**
+
+```bash
+# en dev
+cd backend
+pnpm run admin:create -- --email admin@example.com --password 'longpwd' --name 'Admin'
+
+# en prod (dans le conteneur)
+docker compose exec backend node dist/scripts/create-admin.js \
+  --email admin@example.com --password 'longpwd' --name 'Admin'
+```
+
+Le script désactive temporairement le bootstrap par env-var pendant son exécution pour éviter les conflits.
+
+### Se connecter
+
+Aller sur `/login`, saisir l'email et le mot de passe : la redirection post-login détecte le rôle `admin` et envoie sur `/admin`. Un middleware Nuxt (`app/middleware/admin.ts`) protège toutes les routes `/admin/*` et renvoie sur `/map` les utilisateurs non-admin.
+
+Côté API, toutes les routes `/api/admin/*` sont protégées par `JwtAuthGuard` + `RolesGuard` ; le `RolesGuard` re-vérifie le rôle en base avec un cache de 30 secondes pour que les révocations / promotions soient prises en compte sans attendre l'expiration du JWT.
+
+### Paramètres applicatifs (overlay DB)
+
+Les pages `/admin/settings` permettent d'éditer à chaud sans redémarrage les valeurs suivantes (la table `app_settings` surcharge les variables d'environnement) :
+
+| Clé | Variable d'env d'origine | Description |
+|---|---|---|
+| `app.fareBaseXpf` | `FARE_BASE_XPF` | Tarif fixe de prise en charge (XPF) |
+| `app.farePerKmXpf` | `FARE_PER_KM_XPF` | Tarif par kilomètre (XPF) |
+| `app.initialWalletBalanceXpf` | `INITIAL_WALLET_BALANCE_XPF` | Solde initial des nouveaux comptes |
+| `app.pickupMaxDistanceMeters` | `PICKUP_MAX_DISTANCE_METERS` | Distance max passager↔conducteur pour scanner le QR de prise en charge |
+| `app.dropoffMinDelaySeconds` | `DROPOFF_MIN_DELAY_SECONDS` | Délai minimum entre prise en charge et dépose |
+| `app.nearbyDriversRadiusMeters` | `NEARBY_DRIVERS_RADIUS_METERS` | Rayon de diffusion realtime des conducteurs proches |
+
+Toute modification est tracée dans le journal d'audit (`/admin/audit`) avec l'auteur, l'ancienne et la nouvelle valeur.
+
+### Audit log
+
+Toutes les actions sensibles (changement de rôle, suspension, soft-delete, ajustement de wallet, annulation de trajet, suppression de véhicule, modification d'un paramètre) sont enregistrées dans `admin_actions` et consultables sur `/admin/audit` avec filtres par acteur et type d'action. La table est append-only — il n'existe pas d'endpoint API pour modifier ou supprimer une entrée.
+
 ## Déploiement Docker derrière Traefik
 
 Architecture cible : **3 conteneurs** (`db`, `backend`, `frontend`) + un Traefik existant qui termine TLS et fait du virtual-hosting via deux sous-domaines :
@@ -282,8 +345,8 @@ Si le certificat Let's Encrypt n'est pas émis :
 - Paiement **mocké** (wallet interne uniquement, crédit initial 10 000 XPF).
 - Un seul véhicule actif par conducteur dans le parcours `/map`.
 - Tracking GPS en premier plan uniquement (limitation du navigateur pour les PWA).
-- Pas d'administration, pas de notifications push, pas de SMS OTP.
+- Pas de notifications push, pas de SMS OTP.
 
 ## Roadmap
 
-Paiement réel (Stripe/orange Money), tracking background (Capacitor natif), admin backoffice, notifications push (FCM/APNs), historique public pour modération, scoring conducteurs/passagers, pricing dynamique (nuit, affluence), multi-route.
+Paiement réel (Stripe/orange Money), tracking background (Capacitor natif), notifications push (FCM/APNs), historique public pour modération, scoring conducteurs/passagers, pricing dynamique (nuit, affluence), multi-route.

@@ -1,9 +1,9 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
@@ -15,6 +15,7 @@ import {
 import { User } from '../../entities/user.entity';
 import { WalletTransaction } from '../../entities/wallet-transaction.entity';
 import { Wallet } from '../../entities/wallet.entity';
+import { SettingsService } from '../settings/settings.service';
 import type { LoginDto } from './dto/login.dto';
 import type { SignupDto } from './dto/signup.dto';
 import type { JwtPayload } from './types/jwt-payload';
@@ -35,16 +36,21 @@ export class AuthService {
   constructor(
     @InjectRepository(User) private readonly users: Repository<User>,
     private readonly jwt: JwtService,
-    private readonly config: ConfigService,
+    private readonly settings: SettingsService,
     private readonly dataSource: DataSource,
   ) {}
 
   async signup(dto: SignupDto): Promise<AuthResult> {
+    // Self-service signup is reserved for end users. Admins are bootstrapped
+    // through env / CLI on the server, never through the public endpoint.
+    if (dto.role === UserRole.ADMIN) {
+      throw new ForbiddenException('Cannot self-register as admin');
+    }
     const existing = await this.users.findOne({ where: { email: dto.email } });
     if (existing) throw new ConflictException('Email already registered');
 
     const password_hash = await bcrypt.hash(dto.password, 10);
-    const initialBalance = this.config.get<number>(
+    const initialBalance = this.settings.getNumber(
       'app.initialWalletBalanceXpf',
       10000,
     );
@@ -81,9 +87,14 @@ export class AuthService {
 
   async login(dto: LoginDto): Promise<AuthResult> {
     const user = await this.users.findOne({ where: { email: dto.email } });
-    if (!user) throw new UnauthorizedException('Invalid credentials');
+    if (!user || user.deleted_at) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
     const ok = await bcrypt.compare(dto.password, user.password_hash);
     if (!ok) throw new UnauthorizedException('Invalid credentials');
+    if (user.suspended_at) {
+      throw new ForbiddenException('Account suspended');
+    }
     return this.issueToken(user);
   }
 

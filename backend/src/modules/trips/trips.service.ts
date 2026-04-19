@@ -7,7 +7,6 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
@@ -18,6 +17,7 @@ import { MapboxService } from '../mapbox/mapbox.service';
 import { PricingService } from '../pricing/pricing.service';
 import { QrService } from '../qr/qr.service';
 import { RealtimeBus } from '../realtime-bus/realtime-bus.service';
+import { SettingsService } from '../settings/settings.service';
 import { WalletService } from '../wallet/wallet.service';
 import type {
   EstimateDto,
@@ -43,7 +43,7 @@ export class TripsService {
     private readonly pricing: PricingService,
     private readonly wallet: WalletService,
     private readonly bus: RealtimeBus,
-    private readonly config: ConfigService,
+    private readonly settings: SettingsService,
   ) {}
 
   async pickup(passengerId: string, dto: PickupDto): Promise<Trip> {
@@ -81,7 +81,10 @@ export class TripsService {
     }
 
     const distance = this.locations.distanceMeters(passengerPos, driverPos);
-    const maxDist = this.config.get<number>('app.pickupMaxDistanceMeters', 50);
+    const maxDist = this.settings.getNumber(
+      'app.pickupMaxDistanceMeters',
+      50,
+    );
     if (distance > maxDist) {
       throw new BadRequestException(
         `Too far from driver (${Math.round(distance)}m > ${maxDist}m)`,
@@ -128,7 +131,7 @@ export class TripsService {
    */
   private ensureMinDuration(trip: Trip): void {
     const minDelayMs =
-      this.config.get<number>('app.dropoffMinDelaySeconds', 30) * 1000;
+      this.settings.getNumber('app.dropoffMinDelaySeconds', 30) * 1000;
     const elapsedMs = Date.now() - new Date(trip.started_at).getTime();
     if (elapsedMs < minDelayMs) {
       const wait = Math.ceil((minDelayMs - elapsedMs) / 1000);

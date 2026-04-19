@@ -17,6 +17,7 @@ export const useAuthStore = defineStore('auth', {
   }),
   getters: {
     isAuthed: (s) => !!s.token && !!s.user,
+    isAdmin: (s): boolean => s.user?.role === 'admin',
     isDriver: (s): boolean =>
       s.user?.role === 'driver' || s.user?.role === 'both',
     isPassenger: (s): boolean =>

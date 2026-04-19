@@ -14,6 +14,8 @@ const auth = useAuthStore()
 const api = useApi()
 const toast = useToast()
 
+const route = useRoute()
+
 async function submit() {
   if (!email.value || !password.value) return
   loading.value = true
@@ -30,7 +32,16 @@ async function submit() {
       detail: res.user.full_name,
       life: 2000,
     })
-    await navigateTo('/map')
+    const redirectQuery = route.query.redirect
+    const redirect =
+      typeof redirectQuery === 'string' ? redirectQuery : null
+    if (redirect && redirect.startsWith('/')) {
+      await navigateTo(redirect)
+    } else if (res.user.role === 'admin') {
+      await navigateTo('/admin')
+    } else {
+      await navigateTo('/map')
+    }
   } catch (e: unknown) {
     const msg =
       (e as { data?: { message?: string }; message?: string })?.data?.message ||

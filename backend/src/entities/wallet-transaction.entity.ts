@@ -42,6 +42,24 @@ export class WalletTransaction {
   @JoinColumn({ name: 'trip_id' })
   trip!: Trip | null;
 
+  /**
+   * For type='adjustment' rows: human-readable reason logged by the admin
+   * who triggered the operation. Null for normal trip-driven flows.
+   */
+  @Column({ type: 'text', nullable: true })
+  reason!: string | null;
+
+  /**
+   * For type='adjustment' rows: id of the admin user who performed the
+   * change. Null for normal trip-driven flows.
+   */
+  @Column({ type: 'uuid', nullable: true })
+  actor_user_id!: string | null;
+
+  @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'actor_user_id' })
+  actor!: User | null;
+
   @CreateDateColumn()
   created_at!: Date;
 }

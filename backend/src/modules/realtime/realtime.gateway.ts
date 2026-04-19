@@ -1,5 +1,4 @@
 import { Logger, UseGuards } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import {
   ConnectedSocket,
   MessageBody,
@@ -16,6 +15,7 @@ import { WsJwtGuard } from '../auth/ws-jwt.guard';
 import type { AuthenticatedSocket } from '../auth/ws-jwt.guard';
 import { LocationsService } from '../locations/locations.service';
 import { RealtimeBus } from '../realtime-bus/realtime-bus.service';
+import { SettingsService } from '../settings/settings.service';
 import { TripsService } from '../trips/trips.service';
 import { VehiclesService } from '../vehicles/vehicles.service';
 
@@ -68,8 +68,12 @@ export class RealtimeGateway
     private readonly vehicles: VehiclesService,
     private readonly trips: TripsService,
     private readonly bus: RealtimeBus,
-    private readonly config: ConfigService,
+    private readonly settings: SettingsService,
   ) {}
+
+  private get nearbyRadiusMeters(): number {
+    return this.settings.getNumber('app.nearbyDriversRadiusMeters', 3000);
+  }
 
   afterInit(server: Server): void {
     this.bus.registerServer(server);
@@ -223,10 +227,7 @@ export class RealtimeGateway
   }
 
   private async broadcastDriver(driverUserId: string): Promise<void> {
-    const radius = this.config.get<number>(
-      'app.nearbyDriversRadiusMeters',
-      3000,
-    );
+    const radius = this.nearbyRadiusMeters;
     const pos = await this.locations.getDriverPosition(driverUserId);
     if (!pos || !pos.is_online || !pos.direction) return;
 
@@ -257,10 +258,7 @@ export class RealtimeGateway
   }
 
   private async broadcastPassenger(passengerUserId: string): Promise<void> {
-    const radius = this.config.get<number>(
-      'app.nearbyDriversRadiusMeters',
-      3000,
-    );
+    const radius = this.nearbyRadiusMeters;
     const pos = await this.locations.getPassengerPosition(passengerUserId);
     if (!pos || !pos.is_waiting || !pos.direction) return;
     const nearby = await this.locations.findNearbyOnlineDrivers({
@@ -285,10 +283,7 @@ export class RealtimeGateway
   }
 
   private async notifyDriverRemoved(driverUserId: string): Promise<void> {
-    const radius = this.config.get<number>(
-      'app.nearbyDriversRadiusMeters',
-      3000,
-    );
+    const radius = this.nearbyRadiusMeters;
     const pos = await this.locations.getDriverPosition(driverUserId);
     if (!pos || !pos.direction) return;
     const nearby = await this.locations.findNearbyWaitingPassengers({
@@ -305,10 +300,7 @@ export class RealtimeGateway
   }
 
   private async notifyPassengerRemoved(passengerUserId: string): Promise<void> {
-    const radius = this.config.get<number>(
-      'app.nearbyDriversRadiusMeters',
-      3000,
-    );
+    const radius = this.nearbyRadiusMeters;
     const pos = await this.locations.getPassengerPosition(passengerUserId);
     if (!pos || !pos.direction) return;
     const nearby = await this.locations.findNearbyOnlineDrivers({
@@ -327,10 +319,7 @@ export class RealtimeGateway
   private async pushNearbyDriversToPassenger(
     passengerUserId: string,
   ): Promise<void> {
-    const radius = this.config.get<number>(
-      'app.nearbyDriversRadiusMeters',
-      3000,
-    );
+    const radius = this.nearbyRadiusMeters;
     const pos = await this.locations.getPassengerPosition(passengerUserId);
     if (!pos || !pos.direction) return;
     const drivers = await this.locations.findNearbyOnlineDrivers({
@@ -359,10 +348,7 @@ export class RealtimeGateway
   private async pushNearbyPassengersToDriver(
     driverUserId: string,
   ): Promise<void> {
-    const radius = this.config.get<number>(
-      'app.nearbyDriversRadiusMeters',
-      3000,
-    );
+    const radius = this.nearbyRadiusMeters;
     const pos = await this.locations.getDriverPosition(driverUserId);
     if (!pos || !pos.is_online || !pos.direction) return;
     const passengers = await this.locations.findNearbyWaitingPassengers({

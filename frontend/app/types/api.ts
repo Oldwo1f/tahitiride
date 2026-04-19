@@ -1,6 +1,11 @@
 export type Direction = 'city' | 'country'
-export type UserRole = 'passenger' | 'driver' | 'both'
+export type UserRole = 'passenger' | 'driver' | 'both' | 'admin'
 export type TripStatus = 'active' | 'completed' | 'cancelled'
+export type WalletTransactionKind =
+  | 'initial'
+  | 'debit'
+  | 'credit'
+  | 'adjustment'
 
 export interface AuthUser {
   id: string
@@ -127,7 +132,7 @@ export interface WalletTransactionDto {
   id: string
   user_id: string
   amount_xpf: number
-  type: 'initial' | 'debit' | 'credit'
+  type: WalletTransactionKind
   trip_id: string | null
   created_at: string
 }
