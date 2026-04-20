@@ -2,10 +2,11 @@
 import type { AuthUser, Certification, Vehicle } from '~/types/api'
 
 /**
- * 3-step wizard that turns a passenger account into a driver account:
+ * 3-step wizard that activates driver mode for any user:
  *   1. Driver license upload (`POST /certifications/license`)
  *   2. Vehicle photo + AI-assisted creation (`POST /vehicles/photo/analyze`
- *      then `POST /vehicles/mine`) — auto-promotes the user to `both` here
+ *      then `POST /vehicles/mine`) — the backend flips `is_driver=true`
+ *      on the first vehicle created.
  *   3. Insurance vignette (`POST /certifications/vehicle/:id/insurance`)
  *
  * Embedded in a full-screen Dialog opened from `/profile`. On finish we
@@ -87,22 +88,20 @@ async function onInsuranceNext() {
 async function refreshAuthUser() {
   try {
     const me = await api<AuthUser>('/api/users/me')
-    if (auth.token) {
-      auth.setAuth({ token: auth.token, user: me })
-    }
+    auth.setUser(me)
   } catch {
-    // The promotion will be picked up on the next navigation; not fatal.
+    // The flag flip will be picked up on the next navigation; not fatal.
   }
 }
 
 async function finish() {
   // Belt + suspenders: refresh the user one more time in case the
-  // promotion happened during the vehicle step but the call above
+  // is_driver flip happened during the vehicle step but the call above
   // failed, or if some other server-side change occurred.
   await refreshAuthUser()
   toast.add({
     severity: 'success',
-    summary: 'Vous êtes conducteur !',
+    summary: 'Mode conducteur activé',
     detail:
       'Votre profil est complet. Une validation manuelle peut être en cours pour les documents.',
     life: 5000,

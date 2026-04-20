@@ -4,9 +4,7 @@ export enum Direction {
 }
 
 export enum UserRole {
-  PASSENGER = 'passenger',
-  DRIVER = 'driver',
-  BOTH = 'both',
+  USER = 'user',
   ADMIN = 'admin',
 }
 

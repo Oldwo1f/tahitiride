@@ -25,13 +25,13 @@ function printHelp(): void {
   console.log(`Usage:
   pnpm run clean:test-data -- [--confirm]
 
-Test-only utility to wipe driver/vehicle related state and demote every
-non-admin user back to a fresh \`passenger\` role. Useful to start fresh on
-the new driver onboarding wizard during the test phase.
+Test-only utility to wipe driver/vehicle related state and reset every
+non-admin user's driver-mode flag. Useful to start fresh on the new
+driver onboarding wizard during the test phase.
 
 Operations performed (inside a transaction):
   - TRUNCATE trip_points, trips, certifications, vehicles RESTART IDENTITY CASCADE
-  - UPDATE users SET role='passenger' WHERE role IN ('driver','both')
+  - UPDATE users SET is_driver = FALSE WHERE is_driver = TRUE
 
 Without --confirm the script only prints what would be deleted. Pass
 --confirm (or -y) to actually run the cleanup.
@@ -51,7 +51,7 @@ async function main(): Promise<void> {
   const logger = new Logger('CleanTestData');
 
   // Skip the bootstrap admin promotion path so it can't race with our
-  // role demotion during this run.
+  // flag reset during this run.
   delete process.env.BOOTSTRAP_ADMIN_EMAIL;
 
   const app = await NestFactory.createApplicationContext(AppModule, {
@@ -74,7 +74,7 @@ async function main(): Promise<void> {
         `SELECT COUNT(*) FROM trip_points`,
       );
       const [{ count: drivers }] = await tx.query<{ count: string }[]>(
-        `SELECT COUNT(*) FROM users WHERE role IN ('driver','both')`,
+        `SELECT COUNT(*) FROM users WHERE is_driver = TRUE`,
       );
       return {
         vehicles: Number(vehicles),
@@ -90,7 +90,7 @@ async function main(): Promise<void> {
     logger.log(`  certifications: ${counts.certs}`);
     logger.log(`  trips:          ${counts.trips}`);
     logger.log(`  trip_points:    ${counts.points}`);
-    logger.log(`  users to demote (role driver|both): ${counts.drivers}`);
+    logger.log(`  users with driver mode on: ${counts.drivers}`);
 
     if (!args.confirm) {
       logger.warn(`Dry run — pass --confirm to actually wipe the data above.`);
@@ -102,12 +102,12 @@ async function main(): Promise<void> {
         `TRUNCATE TABLE "trip_points","trips","certifications","vehicles" RESTART IDENTITY CASCADE`,
       );
       await tx.query(
-        `UPDATE "users" SET role = 'passenger' WHERE role IN ('driver','both')`,
+        `UPDATE "users" SET is_driver = FALSE WHERE is_driver = TRUE`,
       );
     });
 
     logger.log(
-      `Cleanup done: vehicles, trips, trip_points and certifications wiped; ${counts.drivers} user(s) demoted to passenger.`,
+      `Cleanup done: vehicles, trips, trip_points and certifications wiped; ${counts.drivers} user(s) reset to passenger-only mode.`,
     );
   } finally {
     await app.close();

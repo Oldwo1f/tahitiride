@@ -20,6 +20,7 @@ export interface AdminUserListItem {
   full_name: string
   phone: string | null
   role: UserRole
+  is_driver: boolean
   created_at: string
   suspended_at: string | null
   balance_xpf: number
@@ -39,6 +40,7 @@ export interface AdminUserDetail {
   full_name: string
   phone: string | null
   role: UserRole
+  is_driver: boolean
   created_at: string
   suspended_at: string | null
   deleted_at: string | null
@@ -194,6 +196,8 @@ export interface AdminOverview {
   users: {
     total: number
     by_role: Record<string, number>
+    /** Count of users whose `is_driver` flag is true (active drivers). */
+    drivers: number
     signups_last_30d: { date: string; count: number }[]
   }
   trips: {

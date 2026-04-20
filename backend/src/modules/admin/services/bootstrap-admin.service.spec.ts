@@ -42,7 +42,9 @@ function buildService(state: RepoState): BootstrapAdminService {
         state.wallets.push(w);
         return Promise.resolve(w);
       }),
-    create: jest.fn().mockImplementation((w) => w),
+    create: jest
+      .fn()
+      .mockImplementation((w: { user_id: string; balance_xpf: number }) => w),
   };
   const tx = {
     getRepository: jest.fn().mockImplementation((entity: { name?: string }) => {
@@ -102,7 +104,7 @@ describe('BootstrapAdminService.upsert', () => {
           full_name: 'Foo',
           phone: null,
           password_hash: 'kept',
-          role: UserRole.PASSENGER,
+          role: UserRole.USER,
           suspended_at: null,
           deleted_at: null,
         } as unknown as User,
@@ -177,7 +179,7 @@ describe('BootstrapAdminService.upsert', () => {
           full_name: 'Foo',
           phone: null,
           password_hash: 'kept',
-          role: UserRole.PASSENGER,
+          role: UserRole.USER,
           suspended_at: new Date(),
           deleted_at: new Date(),
         } as unknown as User,

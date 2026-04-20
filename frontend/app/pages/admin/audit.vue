@@ -23,6 +23,8 @@ const ACTION_OPTIONS = [
   { label: 'Toutes', value: null },
   { label: 'wallet.adjust', value: 'wallet.adjust' },
   { label: 'user.role.update', value: 'user.role.update' },
+  { label: 'user.driver.enable', value: 'user.driver.enable' },
+  { label: 'user.driver.disable', value: 'user.driver.disable' },
   { label: 'user.suspend', value: 'user.suspend' },
   { label: 'user.unsuspend', value: 'user.unsuspend' },
   { label: 'user.delete', value: 'user.delete' },
@@ -34,6 +36,8 @@ const ACTION_OPTIONS = [
 const ACTION_LABEL: Record<string, string> = {
   'wallet.adjust': 'Ajustement wallet',
   'user.role.update': 'Changement de rôle',
+  'user.driver.enable': 'Activation mode conducteur',
+  'user.driver.disable': 'Désactivation mode conducteur',
   'user.suspend': 'Suspension',
   'user.unsuspend': 'Réactivation',
   'user.delete': 'Suppression utilisateur',

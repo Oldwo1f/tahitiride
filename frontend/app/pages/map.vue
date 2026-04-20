@@ -1,8 +1,16 @@
 <script setup lang="ts">
-import type { Direction, Trip, TripEstimate, Vehicle } from '~/types/api'
+import type {
+  Direction,
+  Trip,
+  TripEstimate,
+  Vehicle,
+  WalletBalance,
+  WalletRequestDto,
+} from '~/types/api'
 import { DESTINATION_GROUPS, getDestination } from '~/utils/destinations'
 import { usePreferencesStore } from '~/stores/preferences'
-import { useUiModeStore, type UiMode } from '~/stores/uiMode'
+
+type MapMode = 'passenger' | 'driver'
 
 definePageMeta({
   layout: 'fullscreen',
@@ -17,13 +25,19 @@ const geoStore = useGeoStore()
 const tripStore = useTripStore()
 const driversStore = useDriversStore()
 const passengersStore = usePassengersStore()
-const uiModeStore = useUiModeStore()
 const prefStore = usePreferencesStore()
 const { inferDirection } = useDirection()
 
 useLiveGeolocation()
 
-const mode = computed<UiMode>(() => uiModeStore.mode)
+/**
+ * UI mode of the map is directly driven by the `is_driver` flag on the
+ * authenticated user. Toggling driver mode in `/profile` updates the
+ * auth store which reactively flips this value.
+ */
+const mode = computed<MapMode>(() =>
+  auth.isDriver ? 'driver' : 'passenger',
+)
 /**
  * Bound to the persisted preference: any change here is mirrored back to
  * localStorage via the store so the destination survives reloads.
@@ -51,6 +65,8 @@ const estimateError = ref<string | null>(null)
 let estimateAbort: AbortController | null = null
 let estimateDebounce: ReturnType<typeof setTimeout> | null = null
 
+const walletBalance = ref<number | null>(null)
+
 async function loadVehicles() {
   if (!auth.isDriver) return
   try {
@@ -66,6 +82,27 @@ async function loadActiveTrip() {
     tripStore.setFromApi(activeTrip.value, auth.user?.id ?? null)
   } catch {
     /* ignore */
+  }
+}
+
+/**
+ * Fetch the passenger's wallet balance so we can warn when they lack
+ * enough credit for the selected trip. Silent on failure: the alerts
+ * rely on a non-null balance so a missing value simply hides them.
+ */
+async function loadWalletBalance() {
+  try {
+    const res = await api<WalletBalance>('/api/wallet')
+    walletBalance.value = res.balance_xpf
+  } catch {
+    walletBalance.value = null
+  }
+}
+
+function onWalletRequestUpdated(req: WalletRequestDto): void {
+  if (!auth.user || req.user_id !== auth.user.id) return
+  if (req.status === 'approved') {
+    void loadWalletBalance()
   }
 }
 
@@ -233,6 +270,15 @@ async function togglePassengerWait() {
     passengerWaiting.value = false
     driversStore.clear()
   } else {
+    if (insufficientCredit.value) {
+      toast.add({
+        severity: 'error',
+        summary: 'Solde insuffisant',
+        detail: 'Rechargez votre compte pour réserver ce trajet.',
+        life: 4000,
+      })
+      return
+    }
     if (!ensureDestination()) return
     socket.emit('passenger:wait', {
       direction: direction.value,
@@ -476,13 +522,36 @@ const estimateDurationLabel = computed(() => {
   return `${h} h ${String(r).padStart(2, '0')}`
 })
 
+/**
+ * Credit gating for the passenger: the backend never rejects a pickup
+ * based on balance (settlement caps the debit at the available funds),
+ * so the check is purely a UX nudge to keep the wallet healthy enough
+ * to cover the current trip, and ideally the return trip too.
+ */
+const insufficientCredit = computed<boolean>(() => {
+  if (mode.value !== 'passenger') return false
+  if (!estimate.value) return false
+  if (walletBalance.value === null) return false
+  return walletBalance.value < estimate.value.fare_xpf
+})
+
+const insufficientForRoundTrip = computed<boolean>(() => {
+  if (mode.value !== 'passenger') return false
+  if (!estimate.value) return false
+  if (walletBalance.value === null) return false
+  const fare = estimate.value.fare_xpf
+  return walletBalance.value >= fare && walletBalance.value < fare * 2
+})
+
 onMounted(async () => {
-  await Promise.all([loadVehicles(), loadActiveTrip()])
+  await Promise.all([loadVehicles(), loadActiveTrip(), loadWalletBalance()])
   socket.on('connect', resyncRealtimeState)
+  socket.on('wallet:request:updated', onWalletRequestUpdated)
 })
 
 onBeforeUnmount(() => {
   socket.off('connect', resyncRealtimeState)
+  socket.off('wallet:request:updated', onWalletRequestUpdated)
   if (estimateDebounce) clearTimeout(estimateDebounce)
   if (estimateAbort) estimateAbort.abort()
 })
@@ -556,13 +625,42 @@ onBeforeUnmount(() => {
           <span class="est-cell" title="Durée estimée">
             <i class="pi pi-clock" />
             <span>{{ estimateDurationLabel }}</span>
+            <span class="est-hint">(Sans circu)</span>
           </span>
           <span class="est-cell est-fare" title="Prix estimé">
             <i class="pi pi-money-bill" />
             <span>{{ estimate.fare_xpf }} XPF</span>
+            <span class="est-hint">(Tarif estimé)</span>
           </span>
         </template>
       </div>
+
+      <Message
+        v-if="insufficientCredit"
+        severity="error"
+        :closable="false"
+        class="credit-alert"
+      >
+        <div class="credit-alert-body">
+          <span>Solde insuffisant pour ce trajet. Rechargez votre compte.</span>
+          <Button
+            label="Recharger"
+            icon="pi pi-plus"
+            size="small"
+            severity="danger"
+            @click="navigateTo('/wallet')"
+          />
+        </div>
+      </Message>
+
+      <Message
+        v-else-if="insufficientForRoundTrip"
+        severity="warn"
+        :closable="false"
+        class="credit-alert"
+      >
+        Attention, vous n'avez pas assez de crédit pour faire l'aller-retour.
+      </Message>
     </div>
 
     <MapCanvas
@@ -585,6 +683,7 @@ onBeforeUnmount(() => {
           :label="passengerWaiting ? `Arrêter l'attente` : `Je suis en attente`"
           :severity="passengerWaiting ? 'warn' : 'primary'"
           :icon="passengerWaiting ? 'pi pi-times' : 'pi pi-user'"
+          :disabled="!passengerWaiting && insufficientCredit"
           fluid
           size="large"
           @click="togglePassengerWait"
@@ -713,8 +812,21 @@ onBeforeUnmount(() => {
   font-weight: 600;
   color: var(--p-primary-color);
 }
+.estimate-row .est-hint {
+  margin-left: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--p-text-muted-color);
+}
 .estimate-row .est-warn {
   color: var(--p-orange-500);
+}
+.credit-alert-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 .destination-row {
   display: flex;

@@ -15,6 +15,7 @@ import { User } from '../../entities/user.entity';
 
 interface CachedRole {
   role: UserRole;
+  is_driver: boolean;
   suspended: boolean;
   expiresAt: number;
 }
@@ -65,6 +66,7 @@ export class RolesGuard implements CanActivate {
     }
 
     principal.role = fresh.role;
+    principal.is_driver = fresh.is_driver;
     return true;
   }
 
@@ -77,7 +79,7 @@ export class RolesGuard implements CanActivate {
 
     const row = await this.users.findOne({
       where: { id: userId },
-      select: ['id', 'role', 'suspended_at', 'deleted_at'],
+      select: ['id', 'role', 'is_driver', 'suspended_at', 'deleted_at'],
     });
     if (!row || row.deleted_at) {
       this.cache.delete(userId);
@@ -86,6 +88,7 @@ export class RolesGuard implements CanActivate {
 
     const entry: CachedRole = {
       role: row.role,
+      is_driver: !!row.is_driver,
       suspended: !!row.suspended_at,
       expiresAt: now + CACHE_TTL_MS,
     };

@@ -41,6 +41,7 @@ export class AdminAnalyticsService {
     const [
       usersTotal,
       usersByRole,
+      driversTotal,
       signups30d,
       tripsTotal,
       tripsByStatus,
@@ -55,6 +56,11 @@ export class AdminAnalyticsService {
       this.ds.query<RoleRow[]>(
         `SELECT role::text AS role, COUNT(*)::text AS count
          FROM users WHERE deleted_at IS NULL GROUP BY role`,
+      ),
+      this.ds.query<CountRow[]>(
+        `SELECT COUNT(*)::text AS count
+         FROM users
+         WHERE deleted_at IS NULL AND is_driver = TRUE`,
       ),
       this.ds.query<SeriesRow[]>(
         `SELECT date_trunc('day', created_at) AS d, COUNT(*)::text AS count
@@ -112,6 +118,7 @@ export class AdminAnalyticsService {
       users: {
         total: Number(usersTotal[0]?.count ?? 0),
         by_role: roleCounts,
+        drivers: Number(driversTotal[0]?.count ?? 0),
         signups_last_30d: signups30d.map((r) => ({
           date: r.d,
           count: Number(r.count),

@@ -6,6 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../../entities/user.entity';
+import { Vehicle } from '../../entities/vehicle.entity';
 import { UploadsService } from '../uploads/uploads.service';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
 
@@ -19,6 +20,7 @@ export interface ProfileResponse {
   avatar_path: string | null;
   avatar_url: string | null;
   role: User['role'];
+  is_driver: boolean;
   created_at: Date;
   suspended_at: Date | null;
   vehicles?: User['vehicles'];
@@ -29,6 +31,7 @@ export interface ProfileResponse {
 export class UsersService {
   constructor(
     @InjectRepository(User) private readonly users: Repository<User>,
+    @InjectRepository(Vehicle) private readonly vehicles: Repository<Vehicle>,
     private readonly uploads: UploadsService,
   ) {}
 
@@ -47,6 +50,7 @@ export class UsersService {
     void _omit;
     return {
       ...rest,
+      is_driver: !!user.is_driver,
       avatar_url: UsersService.buildAvatarUrl(user.avatar_path),
     };
   }
@@ -107,6 +111,39 @@ export class UsersService {
     if (!user) throw new NotFoundException('User not found');
     user.avatar_path = stored.relativePath;
     await this.users.save(user);
+    return this.getProfile(userId);
+  }
+
+  /**
+   * Self-service driver-mode toggle. Turning the flag on requires at
+   * least one registered vehicle — the frontend delegates that first
+   * bootstrap to the onboarding wizard, which creates a vehicle (and
+   * flips the flag as a side effect in `VehiclesService.createMine`).
+   * Calling this endpoint directly without a vehicle keeps the user in
+   * a consistent state and surfaces a clear error message.
+   */
+  async setDriverMode(
+    userId: string,
+    isDriver: boolean,
+  ): Promise<ProfileResponse> {
+    const user = await this.users.findOne({ where: { id: userId } });
+    if (!user || user.deleted_at) throw new NotFoundException('User not found');
+
+    if (isDriver && !user.is_driver) {
+      const vehicleCount = await this.vehicles.count({
+        where: { user_id: userId },
+      });
+      if (vehicleCount === 0) {
+        throw new BadRequestException(
+          "Ajoutez un véhicule avant d'activer le mode conducteur",
+        );
+      }
+    }
+
+    if (user.is_driver !== isDriver) {
+      user.is_driver = isDriver;
+      await this.users.save(user);
+    }
     return this.getProfile(userId);
   }
 }

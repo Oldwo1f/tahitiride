@@ -1,5 +1,5 @@
 export type Direction = 'city' | 'country'
-export type UserRole = 'passenger' | 'driver' | 'both' | 'admin'
+export type UserRole = 'user' | 'admin'
 export type TripStatus = 'active' | 'completed' | 'cancelled'
 export type WalletTransactionKind =
   | 'initial'
@@ -16,6 +16,12 @@ export interface AuthUser {
   /** Relative URL `/api/uploads/avatars/<file>` or `null` when unset. */
   avatar_url: string | null
   role: UserRole
+  /**
+   * Independent capability flag: any user (including admins) can toggle
+   * driver mode on/off. Governs whether the driver UI (map publisher, QR
+   * scanner, payouts…) is active.
+   */
+  is_driver: boolean
   phone: string | null
 }
 
@@ -57,13 +63,14 @@ export interface OcrVehicleExtraction {
 
 /**
  * Response of `POST /api/vehicles/mine`. `user_promoted` is true when the
- * call auto-promoted the caller from `passenger` to `both` so the
- * frontend can refresh its auth store.
+ * call auto-activated driver mode (`is_driver` flipped from false to true)
+ * because this is the user's first registered vehicle; the frontend can
+ * use `user_is_driver` to refresh its auth store without an extra round trip.
  */
 export interface CreateVehicleResponse {
   vehicle: Vehicle
   user_promoted: boolean
-  user_role: UserRole
+  user_is_driver: boolean
 }
 
 export type CertificationType = 'license' | 'insurance'

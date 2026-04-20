@@ -87,7 +87,7 @@ function onSubmitted(): void {
 // renewal right after login).
 async function refreshFromBackend(): Promise<void> {
   if (!auth.isAuthed || !auth.user) return
-  if (auth.user.role === 'passenger' || auth.user.role === 'admin') return
+  if (!auth.isDriver) return
   try {
     const me = await api<MyCertifications>('/api/certifications/me')
     for (const v of me.vehicles) {

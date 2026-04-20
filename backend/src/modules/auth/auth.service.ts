@@ -34,6 +34,7 @@ export interface AuthResult {
     last_name: string | null;
     avatar_url: string | null;
     role: UserRole;
+    is_driver: boolean;
     phone: string | null;
   };
 }
@@ -78,10 +79,11 @@ export class AuthService {
 
     const password_hash = await bcrypt.hash(dto.password, 10);
 
-    // Every self-service signup creates a passenger account. Drivers go
-    // through the onboarding wizard (`/profile`) which auto-promotes the
-    // role to `both` once a vehicle is created. Admins are bootstrapped
-    // separately via the CLI / env (`scripts/create-admin.ts`).
+    // Every self-service signup creates a standard `user` account with
+    // `is_driver=false` (passenger-only view). The driver onboarding
+    // wizard (`/profile`) flips `is_driver` to true once a vehicle is
+    // created. Admins are bootstrapped separately via the CLI / env
+    // (`scripts/create-admin.ts`).
     const user = await this.createUserWithWallet({
       email: dto.email,
       phone: dto.phone || null,
@@ -89,7 +91,8 @@ export class AuthService {
       full_name: full,
       first_name: first || null,
       last_name: last || null,
-      role: UserRole.PASSENGER,
+      role: UserRole.USER,
+      is_driver: false,
     });
 
     return this.issueToken(user);
@@ -212,7 +215,8 @@ export class AuthService {
       full_name: profile.name,
       first_name: profile.first_name,
       last_name: profile.last_name,
-      role: UserRole.PASSENGER,
+      role: UserRole.USER,
+      is_driver: false,
     });
 
     return this.issueToken(created);
@@ -232,6 +236,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role,
+      is_driver: !!user.is_driver,
     };
     const token = this.jwt.sign(payload);
     return {
@@ -244,6 +249,7 @@ export class AuthService {
         last_name: user.last_name,
         avatar_url: UsersService.buildAvatarUrl(user.avatar_path),
         role: user.role,
+        is_driver: !!user.is_driver,
         phone: user.phone,
       },
     };

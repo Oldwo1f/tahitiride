@@ -10,14 +10,24 @@ import { RolesGuard } from './roles.guard';
 interface UserRow {
   id: string;
   role: UserRole;
+  is_driver: boolean;
   suspended_at: Date | null;
   deleted_at: Date | null;
 }
 
 function buildContext(
-  user: { id: string; role: string } | null,
+  user: { id: string; role: string; is_driver?: boolean } | null,
 ): ExecutionContext {
-  const req = { user: user ?? undefined };
+  const req = {
+    user: user
+      ? {
+          id: user.id,
+          role: user.role,
+          email: 'unused',
+          is_driver: user.is_driver ?? false,
+        }
+      : undefined,
+  };
   return {
     switchToHttp: () => ({ getRequest: () => req }),
     getHandler: () => ({}),
@@ -63,7 +73,8 @@ describe('RolesGuard', () => {
       rows: [
         {
           id: 'u1',
-          role: UserRole.PASSENGER,
+          role: UserRole.USER,
+          is_driver: false,
           suspended_at: null,
           deleted_at: null,
         },
@@ -81,6 +92,7 @@ describe('RolesGuard', () => {
         {
           id: 'u1',
           role: UserRole.ADMIN,
+          is_driver: false,
           suspended_at: new Date(),
           deleted_at: null,
         },
@@ -98,6 +110,7 @@ describe('RolesGuard', () => {
         {
           id: 'u1',
           role: UserRole.ADMIN,
+          is_driver: false,
           suspended_at: null,
           deleted_at: new Date(),
         },
@@ -116,6 +129,7 @@ describe('RolesGuard', () => {
         {
           id: 'u1',
           role: UserRole.ADMIN,
+          is_driver: false,
           suspended_at: null,
           deleted_at: null,
         },
@@ -134,6 +148,7 @@ describe('RolesGuard', () => {
         {
           id: 'u1',
           role: UserRole.ADMIN,
+          is_driver: false,
           suspended_at: null,
           deleted_at: null,
         },
@@ -142,5 +157,36 @@ describe('RolesGuard', () => {
     await expect(
       guard.canActivate(buildContext({ id: 'u1', role: 'admin' })),
     ).resolves.toBe(true);
+  });
+
+  it('refreshes the fresh `is_driver` flag onto the request principal', async () => {
+    const guard = buildGuard({
+      required: [UserRole.ADMIN],
+      rows: [
+        {
+          id: 'u1',
+          role: UserRole.ADMIN,
+          is_driver: true,
+          suspended_at: null,
+          deleted_at: null,
+        },
+      ],
+    });
+    const req: {
+      user: { id: string; role: string; is_driver?: boolean } | undefined;
+    } = {
+      user: {
+        id: 'u1',
+        role: 'admin',
+        is_driver: false,
+      },
+    };
+    const ctx = {
+      switchToHttp: () => ({ getRequest: () => req }),
+      getHandler: () => ({}),
+      getClass: () => ({}),
+    } as unknown as ExecutionContext;
+    await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    expect(req.user?.is_driver).toBe(true);
   });
 });

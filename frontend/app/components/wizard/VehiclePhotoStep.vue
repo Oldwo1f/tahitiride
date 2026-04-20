@@ -159,7 +159,7 @@ async function submit() {
     toast.add({
       severity: 'success',
       summary: res.user_promoted
-        ? 'Véhicule enregistré · compte conducteur activé'
+        ? 'Véhicule enregistré · mode conducteur activé'
         : 'Véhicule enregistré',
       life: 3000,
     })

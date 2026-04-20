@@ -27,6 +27,7 @@ import { CancelTripDto } from './dto/cancel-trip.dto';
 import { ListQueryDto } from './dto/list-query.dto';
 import { TripsListQueryDto } from './dto/trips-list-query.dto';
 import { UpdateSettingDto } from './dto/update-setting.dto';
+import { UpdateUserDriverModeDto } from './dto/update-user-driver-mode.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { UsersListQueryDto } from './dto/users-list-query.dto';
 import { WalletRequestsListQueryDto } from './dto/wallet-requests-list-query.dto';
@@ -80,6 +81,15 @@ export class AdminController {
     @CurrentUser() actor: AuthUser,
   ) {
     return this.users.updateRole(id, dto.role, actor.id);
+  }
+
+  @Patch('users/:id/driver-mode')
+  updateUserDriverMode(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateUserDriverModeDto,
+    @CurrentUser() actor: AuthUser,
+  ) {
+    return this.users.setDriverMode(id, dto.is_driver, actor.id);
   }
 
   @Post('users/:id/suspend')

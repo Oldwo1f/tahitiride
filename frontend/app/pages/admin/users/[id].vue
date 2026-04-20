@@ -12,6 +12,7 @@ definePageMeta({
 
 const admin = useAdminApi()
 const fmt = useAdminFormat()
+const toast = useToast()
 const route = useRoute()
 const userId = computed(() => route.params.id as string)
 
@@ -19,6 +20,7 @@ const user = ref<AdminUserDetail | null>(null)
 const trips = ref<AdminPaginated<AdminTripListItem> | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
+const driverModeSaving = ref(false)
 
 async function load() {
   loading.value = true
@@ -41,6 +43,37 @@ async function load() {
       'Chargement impossible'
   } finally {
     loading.value = false
+  }
+}
+
+async function onDriverModeChange(next: boolean) {
+  if (!user.value || user.value.is_driver === next) return
+  const previous = user.value.is_driver
+  user.value.is_driver = next
+  driverModeSaving.value = true
+  try {
+    await admin.patch(`/users/${userId.value}/driver-mode`, {
+      is_driver: next,
+    })
+    toast.add({
+      severity: 'success',
+      summary: next
+        ? 'Mode conducteur activé'
+        : 'Mode conducteur désactivé',
+      life: 2500,
+    })
+  } catch (e: unknown) {
+    if (user.value) user.value.is_driver = previous
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail:
+        (e as { data?: { message?: string } })?.data?.message ||
+        'Mise à jour impossible',
+      life: 4000,
+    })
+  } finally {
+    driverModeSaving.value = false
   }
 }
 
@@ -74,6 +107,20 @@ onMounted(load)
             <div>
               <div class="label">Rôle</div>
               <Tag :value="fmt.formatRole(user.role)" :severity="fmt.roleSeverity(user.role)" />
+            </div>
+            <div>
+              <div class="label">Mode conducteur</div>
+              <div class="driver-toggle">
+                <ToggleSwitch
+                  :model-value="user.is_driver"
+                  :disabled="driverModeSaving"
+                  aria-label="Basculer le mode conducteur"
+                  @update:model-value="onDriverModeChange"
+                />
+                <span class="tr-subtle">
+                  {{ user.is_driver ? 'Activé' : 'Désactivé' }}
+                </span>
+              </div>
             </div>
             <div>
               <div class="label">Statut</div>
@@ -214,5 +261,10 @@ onMounted(load)
 .inline-link {
   margin-left: 0.5rem;
   font-size: 0.85rem;
+}
+.driver-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 </style>

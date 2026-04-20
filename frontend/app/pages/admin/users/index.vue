@@ -23,15 +23,16 @@ const updating = ref<Set<string>>(new Set())
 
 const roleOptions = [
   { label: 'Tous', value: null },
-  ...(['passenger', 'driver', 'both', 'admin'] as UserRole[]).map((r) => ({
+  ...(['user', 'admin'] as UserRole[]).map((r) => ({
     label: fmt.formatRole(r),
     value: r,
   })),
 ]
 
-const editableRoleOptions = (['passenger', 'driver', 'both', 'admin'] as UserRole[]).map(
-  (r) => ({ label: fmt.formatRole(r), value: r }),
-)
+const editableRoleOptions = (['user', 'admin'] as UserRole[]).map((r) => ({
+  label: fmt.formatRole(r),
+  value: r,
+}))
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 function debouncedReload() {
@@ -87,6 +88,36 @@ async function changeRole(user: AdminUserListItem, role: UserRole) {
       life: 2500,
     })
   } catch (e: unknown) {
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail:
+        (e as { data?: { message?: string } })?.data?.message ||
+        'Mise à jour impossible',
+      life: 4000,
+    })
+  } finally {
+    updating.value.delete(user.id)
+  }
+}
+
+async function changeDriverMode(user: AdminUserListItem, isDriver: boolean) {
+  if (user.is_driver === isDriver) return
+  const previous = user.is_driver
+  updating.value.add(user.id)
+  try {
+    await admin.patch(`/users/${user.id}/driver-mode`, { is_driver: isDriver })
+    user.is_driver = isDriver
+    toast.add({
+      severity: 'success',
+      summary: isDriver
+        ? 'Mode conducteur activé'
+        : 'Mode conducteur désactivé',
+      detail: user.email,
+      life: 2500,
+    })
+  } catch (e: unknown) {
+    user.is_driver = previous
     toast.add({
       severity: 'error',
       summary: 'Erreur',
@@ -228,6 +259,16 @@ function onPage(event: { page: number; rows: number }) {
             option-value="value"
             :disabled="updating.has(data.id)"
             @update:model-value="(v: UserRole) => changeRole(data, v)"
+          />
+        </template>
+      </Column>
+      <Column header="Conducteur">
+        <template #body="{ data }">
+          <ToggleSwitch
+            :model-value="data.is_driver"
+            :disabled="updating.has(data.id)"
+            :aria-label="`Basculer le mode conducteur de ${data.email}`"
+            @update:model-value="(v: boolean) => changeDriverMode(data, v)"
           />
         </template>
       </Column>

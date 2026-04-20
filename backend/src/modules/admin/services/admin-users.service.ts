@@ -45,15 +45,17 @@ export class AdminUsersService {
     }
     const total = await qb.getCount();
     const raw = await qb.getRawAndEntities();
+    const rawRows = raw.raw as Array<{ balance_xpf?: number | string | null }>;
     const items = raw.entities.map((u, idx) => ({
       id: u.id,
       email: u.email,
       full_name: u.full_name,
       phone: u.phone,
       role: u.role,
+      is_driver: !!u.is_driver,
       created_at: u.created_at,
       suspended_at: u.suspended_at,
-      balance_xpf: Number(raw.raw[idx]?.balance_xpf ?? 0),
+      balance_xpf: Number(rawRows[idx]?.balance_xpf ?? 0),
     }));
     return { total, page, pageSize, items };
   }
@@ -91,6 +93,32 @@ export class AdminUsersService {
       targetType: 'user',
       targetId: id,
       payload: { previous, next: role },
+    });
+    return user;
+  }
+
+  /**
+   * Admin-facing switch for the `is_driver` capability. Kept separate
+   * from `updateRole` so the back-office can toggle driver mode
+   * independently of the access role (an admin can flip the flag on
+   * any user, including another admin).
+   */
+  async setDriverMode(id: string, isDriver: boolean, actorId: string) {
+    const user = await this.users.findOne({ where: { id } });
+    if (!user || user.deleted_at) {
+      throw new NotFoundException('User not found');
+    }
+    if (user.is_driver === isDriver) {
+      return user;
+    }
+    user.is_driver = isDriver;
+    await this.users.save(user);
+    await this.audit.record({
+      actorId,
+      action: isDriver ? 'user.driver.enable' : 'user.driver.disable',
+      targetType: 'user',
+      targetId: id,
+      payload: { is_driver: isDriver },
     });
     return user;
   }

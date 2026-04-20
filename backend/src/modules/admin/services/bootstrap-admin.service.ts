@@ -126,6 +126,7 @@ export class BootstrapAdminService implements OnApplicationBootstrap {
           full_name: params.fullName || 'Administrator',
           password_hash,
           role: UserRole.ADMIN,
+          is_driver: false,
           phone: null,
         }),
       );

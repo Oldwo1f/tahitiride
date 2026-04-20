@@ -8,7 +8,6 @@ import type {
   VehicleCertification,
 } from '~/types/api'
 import { usePreferencesStore } from '~/stores/preferences'
-import { useUiModeStore, type UiMode } from '~/stores/uiMode'
 import { DESTINATION_GROUPS } from '~/utils/destinations'
 
 definePageMeta({
@@ -19,13 +18,7 @@ const auth = useAuth()
 const api = useApi()
 const toast = useToast()
 const confirm = useConfirm()
-const uiModeStore = useUiModeStore()
 const prefStore = usePreferencesStore()
-
-const mode = computed<UiMode>({
-  get: () => uiModeStore.mode,
-  set: (value) => uiModeStore.setMode(value),
-})
 
 const homeKey = computed<string | null>({
   get: () => prefStore.home,
@@ -47,6 +40,8 @@ const uploadVehicleId = ref<string | null>(null)
 
 const driverWizardOpen = ref(false)
 const addVehicleWizardOpen = ref(false)
+
+const driverModeSaving = ref(false)
 
 const editingProfile = ref(false)
 const profileForm = reactive({
@@ -87,11 +82,71 @@ async function loadCertifications() {
 }
 
 async function onDriverWizardFinished() {
+  await refreshAuthUser()
   await Promise.all([loadVehicles(), loadCertifications()])
 }
 
 async function onAddVehicleFinished() {
+  await refreshAuthUser()
   await Promise.all([loadVehicles(), loadCertifications()])
+}
+
+async function refreshAuthUser() {
+  try {
+    const me = await api<AuthUser>('/api/users/me')
+    auth.setUser(me)
+  } catch {
+    /* non-fatal; next navigation will refresh */
+  }
+}
+
+/**
+ * Toggle driver mode. When enabling without a vehicle on file we delegate
+ * to the onboarding wizard (license + 1st vehicle + insurance; the backend
+ * flips `is_driver` on vehicle creation). Otherwise we hit the dedicated
+ * endpoint so an admin or an existing driver can flip the flag instantly.
+ * The ToggleSwitch is bound to `auth.isDriver` so it stays in sync with
+ * the server-confirmed state — we only commit to the store after the API
+ * call returns.
+ */
+async function onDriverModeChange(next: boolean) {
+  const previous = auth.isDriver
+  if (next === previous) return
+
+  if (next && vehicles.value.length === 0) {
+    driverWizardOpen.value = true
+    return
+  }
+
+  driverModeSaving.value = true
+  try {
+    const updated = await api<AuthUser>('/api/users/me/mode', {
+      method: 'PATCH',
+      body: { is_driver: next },
+    })
+    auth.setUser(updated)
+    toast.add({
+      severity: 'success',
+      summary: next ? 'Mode conducteur activé' : 'Mode passager activé',
+      life: 2500,
+    })
+    if (next) {
+      await loadCertifications()
+    } else {
+      certs.value = null
+    }
+  } catch (e: unknown) {
+    toast.add({
+      severity: 'error',
+      summary: 'Erreur',
+      detail:
+        (e as { data?: { message?: string } })?.data?.message ||
+        'Impossible de changer de mode',
+      life: 3500,
+    })
+  } finally {
+    driverModeSaving.value = false
+  }
 }
 
 function askDelete(v: Vehicle) {
@@ -155,11 +210,7 @@ async function saveProfile() {
         phone: profileForm.phone.trim() || null,
       },
     })
-    if (auth.user) {
-      auth.user = { ...auth.user, ...updated }
-      // Persist updates so the next reload reflects new fields.
-      auth.setAuth({ token: auth.token, user: auth.user })
-    }
+    auth.setUser(updated)
     editingProfile.value = false
     toast.add({
       severity: 'success',
@@ -202,10 +253,7 @@ async function onAvatarChange(e: Event) {
       method: 'POST',
       body: formData,
     })
-    if (auth.user) {
-      auth.user = { ...auth.user, ...updated }
-      auth.setAuth({ token: auth.token, user: auth.user })
-    }
+    auth.setUser(updated)
     toast.add({
       severity: 'success',
       summary: 'Photo de profil mise à jour',
@@ -301,16 +349,13 @@ onMounted(() => {
             <div class="profile-email">{{ auth.user?.email }}</div>
             <div class="profile-meta">
               <Tag
-                :value="
-                  auth.user?.role === 'admin'
-                    ? 'Administrateur'
-                    : auth.user?.role === 'both'
-                      ? 'Passager & conducteur'
-                      : auth.user?.role === 'driver'
-                        ? 'Conducteur'
-                        : 'Passager'
-                "
-                :severity="auth.user?.role === 'admin' ? 'warn' : undefined"
+                v-if="auth.isAdmin"
+                value="Administrateur"
+                severity="warn"
+              />
+              <Tag
+                :value="auth.isDriver ? 'Conducteur' : 'Passager'"
+                :severity="auth.isDriver ? 'success' : 'secondary'"
               />
               <span v-if="auth.user?.phone" class="tr-subtle profile-phone">
                 <i class="pi pi-phone" /> {{ auth.user.phone }}
@@ -327,48 +372,31 @@ onMounted(() => {
           />
         </div>
 
-        <div v-if="uiModeStore.canToggle" class="mode-row">
-          <div class="tr-subtle mode-label">Mode actif</div>
-          <SelectButton
-            v-model="mode"
-            :options="[
-              { label: 'Passager', value: 'passenger' },
-              { label: 'Conducteur', value: 'driver' },
-            ]"
-            option-label="label"
-            option-value="value"
-            :allow-empty="false"
-          />
+        <div class="mode-row">
+          <div class="mode-head">
+            <div class="mode-label">
+              <i class="pi pi-car" /> Mode conducteur
+            </div>
+            <ToggleSwitch
+              :model-value="auth.isDriver"
+              :disabled="driverModeSaving"
+              aria-label="Activer le mode conducteur"
+              @update:model-value="onDriverModeChange"
+            />
+          </div>
           <p class="tr-subtle mode-hint">
-            Choisis comment tu apparais dans l'application. Tu peux changer à tout moment.
+            <template v-if="auth.isDriver">
+              Votre véhicule apparaît sur la carte et vous pouvez accepter des passagers.
+              Désactivez pour repasser en mode passager.
+            </template>
+            <template v-else-if="vehicles.length === 0">
+              Activez pour enregistrer votre véhicule, votre permis et votre vignette d'assurance.
+            </template>
+            <template v-else>
+              Activez pour vous rendre visible aux passagers.
+            </template>
           </p>
         </div>
-      </template>
-    </Card>
-
-    <Card
-      v-if="!auth.isDriver && !auth.isAdmin"
-      class="become-driver-card"
-    >
-      <template #title>
-        <div class="title-row">
-          <span><i class="pi pi-car" /> Devenir conducteur</span>
-        </div>
-      </template>
-      <template #content>
-        <p class="tr-subtle become-driver-hint">
-          Mettez votre véhicule à disposition d'autres utilisateurs en
-          quelques minutes. Préparez votre permis et la vignette
-          d'assurance — la marque, le modèle et la plaque seront détectés
-          automatiquement à partir d'une photo.
-        </p>
-        <Button
-          label="Commencer"
-          icon="pi pi-arrow-right"
-          icon-pos="right"
-          fluid
-          @click="driverWizardOpen = true"
-        />
       </template>
     </Card>
 
@@ -713,12 +741,22 @@ onMounted(() => {
 .p-dark .mode-row {
   border-top-color: var(--p-surface-700);
 }
+.mode-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
 .mode-label {
-  font-size: 0.85rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 .mode-hint {
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   margin: 0;
+  line-height: 1.3;
 }
 .fav-hint {
   margin: 0 0 0.75rem;
@@ -837,13 +875,6 @@ onMounted(() => {
   align-items: center;
   gap: 0.25rem;
   flex-shrink: 0;
-}
-.become-driver-card :deep(.p-card-title) {
-  color: var(--p-primary-color);
-}
-.become-driver-hint {
-  margin: 0 0 0.85rem;
-  font-size: 0.9rem;
 }
 .admin-icon {
   color: var(--p-amber-500);

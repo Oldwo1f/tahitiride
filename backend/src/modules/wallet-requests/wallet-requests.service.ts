@@ -8,7 +8,6 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
-  UserRole,
   WalletRequestStatus,
   WalletRequestType,
 } from '../../common/types/direction.enum';
@@ -114,7 +113,7 @@ export class WalletRequestsService {
     if (!user || user.deleted_at) {
       throw new NotFoundException('User not found');
     }
-    if (user.role !== UserRole.DRIVER && user.role !== UserRole.BOTH) {
+    if (!user.is_driver) {
       throw new ForbiddenException(
         'Seuls les conducteurs peuvent demander un retrait',
       );

@@ -40,9 +40,7 @@ export function useAdminFormat() {
   }
 
   const ROLE_LABEL: Record<UserRole, string> = {
-    passenger: 'Passager',
-    driver: 'Conducteur',
-    both: 'Mixte',
+    user: 'Utilisateur',
     admin: 'Admin',
   }
   function formatRole(role: UserRole | string | null | undefined): string {
@@ -55,12 +53,8 @@ export function useAdminFormat() {
     switch (role) {
       case 'admin':
         return 'danger'
-      case 'driver':
-        return 'success'
-      case 'passenger':
+      case 'user':
         return 'info'
-      case 'both':
-        return 'warn'
       default:
         return 'secondary'
     }

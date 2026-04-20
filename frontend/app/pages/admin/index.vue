@@ -150,7 +150,7 @@ const totalTrips30d = computed(() => {
               {{ fmt.formatXpf(overview.finance.wallet_total_balance_xpf) }}
             </div>
             <div class="kpi-sub">
-              {{ Object.keys(overview.users.by_role).length }} rôles actifs
+              {{ overview.users.drivers }} conducteur(s) actif(s)
             </div>
           </template>
         </Card>

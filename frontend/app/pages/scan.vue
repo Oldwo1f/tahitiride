@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { Trip } from '~/types/api'
-import { useUiModeStore } from '~/stores/uiMode'
 
 definePageMeta({
   layout: 'fullscreen',
@@ -12,7 +11,6 @@ const api = useApi()
 const toast = useToast()
 const geoStore = useGeoStore()
 const tripStore = useTripStore()
-const uiModeStore = useUiModeStore()
 useLiveGeolocation()
 
 const submitting = ref(false)
@@ -27,10 +25,9 @@ const errorMsg = ref<string | null>(null)
  *  - otherwise, drivers see their own QR and passengers see the camera
  *    to start a new trip.
  */
-const view = computed<'qr' | 'scanner'>(() => {
-  if (uiModeStore.mode === 'driver' && auth.isDriver) return 'qr'
-  return 'scanner'
-})
+const view = computed<'qr' | 'scanner'>(() =>
+  auth.isDriver ? 'qr' : 'scanner',
+)
 
 const title = computed(() =>
   view.value === 'qr' ? 'Mon QR conducteur' : 'Monter en voiture',

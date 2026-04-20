@@ -63,8 +63,18 @@ export class User {
   @Column({ type: 'varchar', length: 255, nullable: true })
   avatar_path!: string | null;
 
-  @Column({ type: 'enum', enum: UserRole, default: UserRole.BOTH })
+  @Column({ type: 'enum', enum: UserRole, default: UserRole.USER })
   role!: UserRole;
+
+  /**
+   * Independent driver-mode flag. Any authenticated user (including
+   * admins) can flip it from their profile — it controls whether the
+   * driver-only UI (vehicles, license upload, map driver view,
+   * payouts) is available. Decoupled from `role`, which is reserved
+   * for back-office access control.
+   */
+  @Column({ type: 'boolean', default: false })
+  is_driver!: boolean;
 
   @CreateDateColumn()
   created_at!: Date;

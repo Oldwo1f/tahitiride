@@ -6,7 +6,6 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomBytes } from 'crypto';
 import { DataSource, Repository } from 'typeorm';
-import { UserRole } from '../../common/types/direction.enum';
 import { User } from '../../entities/user.entity';
 import { Vehicle } from '../../entities/vehicle.entity';
 import { UploadsService } from '../uploads/uploads.service';
@@ -29,13 +28,13 @@ export interface VehicleListItem {
 export interface CreateVehicleResult {
   vehicle: VehicleListItem;
   /**
-   * True when this creation auto-promoted the owner from `passenger` to
-   * `both` (first vehicle for a passenger account). Lets the frontend
-   * refresh its auth store / unlock the driver-only UI.
+   * True when this creation flipped the owner's `is_driver` flag from
+   * false to true (first vehicle for a passenger account). Lets the
+   * frontend refresh its auth store / unlock the driver-only UI.
    */
   user_promoted: boolean;
-  /** Resulting user role after the (possibly no-op) promotion. */
-  user_role: UserRole;
+  /** Resulting driver-mode flag after the (possibly no-op) promotion. */
+  user_is_driver: boolean;
 }
 
 @Injectable()
@@ -84,10 +83,10 @@ export class VehiclesService {
 
   /**
    * Persists a new vehicle for the user, optionally with a 3/4 face
-   * photo captured by the driver onboarding wizard. When the user is
-   * still a `passenger` (typical first run of the wizard) we promote
-   * them to `both` in the same transaction so the driver-only UI
-   * unlocks immediately on the next request.
+   * photo captured by the driver onboarding wizard. When the owner
+   * is still in passenger-only mode (typical first run of the
+   * wizard) we flip `is_driver` to true in the same transaction so
+   * the driver-only UI unlocks immediately on the next request.
    */
   async createMine(
     userId: string,
@@ -119,8 +118,8 @@ export class VehiclesService {
       if (!user) throw new NotFoundException('User not found');
 
       let userPromoted = false;
-      if (user.role === UserRole.PASSENGER) {
-        user.role = UserRole.BOTH;
+      if (!user.is_driver) {
+        user.is_driver = true;
         await userRepo.save(user);
         userPromoted = true;
       }
@@ -128,7 +127,7 @@ export class VehiclesService {
       return {
         vehicle: VehiclesService.toListItem(created),
         user_promoted: userPromoted,
-        user_role: user.role,
+        user_is_driver: !!user.is_driver,
       };
     });
   }
