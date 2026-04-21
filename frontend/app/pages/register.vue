@@ -72,6 +72,13 @@ async function submit() {
 <template>
   <div class="login-stack">
     <div class="login-hero">
+      <img
+        src="/kartiki-logo.svg"
+        alt="Kartiki"
+        class="login-logo register-logo"
+        width="120"
+        height="120"
+      />
       <h1>Inscription</h1>
       <p class="tr-subtle">Rejoignez le réseau Kartiki.</p>
     </div>
@@ -166,6 +173,18 @@ async function submit() {
 }
 .login-hero {
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+.login-logo {
+  display: block;
+  height: auto;
+}
+.register-logo {
+  width: 120px;
+  max-width: 40vw;
 }
 .login-hero h1 {
   margin: 0;

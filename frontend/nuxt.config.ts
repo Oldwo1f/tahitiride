@@ -1,4 +1,33 @@
 import Aura from '@primeuix/themes/aura'
+import { definePreset } from '@primeuix/themes'
+
+/**
+ * Brand palette derived from the Kartiki logo.
+ *
+ * - Primary  = navy `#0c4489` (logo text + circle stroke, dominant anchor)
+ * - Accent   = teal `#0eacc9` / `#29c4ca` (sky + lagoon, used as CSS vars)
+ * - Natural  = green `#0ca94b` (mountains, used as CSS vars)
+ *
+ * We only override the PrimeVue `primary` semantic token; teal and green live
+ * as CSS custom properties in `main.css` so any component can opt into them.
+ */
+const KartikiPreset = definePreset(Aura, {
+  semantic: {
+    primary: {
+      50: '#e7ecf5',
+      100: '#c3cfe5',
+      200: '#9cb1d4',
+      300: '#6e8bbe',
+      400: '#3c66a6',
+      500: '#0c4489',
+      600: '#0a3d7c',
+      700: '#08336a',
+      800: '#062855',
+      900: '#051e40',
+      950: '#021128',
+    },
+  },
+})
 
 export default defineNuxtConfig({
   compatibilityDate: '2025-09-01',
@@ -34,7 +63,7 @@ export default defineNuxtConfig({
       viewport:
         'width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no',
       meta: [
-        { name: 'theme-color', content: '#0ea5e9' },
+        { name: 'theme-color', content: '#0c4489' },
         { name: 'mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
         {
@@ -47,6 +76,13 @@ export default defineNuxtConfig({
         },
       ],
       link: [
+        { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' },
+        {
+          rel: 'icon',
+          type: 'image/png',
+          sizes: '96x96',
+          href: '/favicon-96x96.png',
+        },
         { rel: 'icon', type: 'image/svg+xml', href: '/icon.svg' },
         { rel: 'apple-touch-icon', href: '/apple-touch-icon-180x180.png' },
       ],
@@ -57,7 +93,7 @@ export default defineNuxtConfig({
     options: {
       ripple: true,
       theme: {
-        preset: Aura,
+        preset: KartikiPreset,
         options: {
           darkModeSelector: '.p-dark',
           cssLayer: false,
@@ -75,16 +111,16 @@ export default defineNuxtConfig({
       short_name: 'Kartiki',
       description: 'Covoiturage décentralisé en temps réel pour Tahiti',
       lang: 'fr-PF',
-      theme_color: '#0ea5e9',
-      background_color: '#0b1220',
+      theme_color: '#0c4489',
+      background_color: '#0c4489',
       display: 'standalone',
       orientation: 'portrait',
       start_url: '/',
       scope: '/',
       icons: [
         {
-          src: '/pwa-64x64.png',
-          sizes: '64x64',
+          src: '/favicon-96x96.png',
+          sizes: '96x96',
           type: 'image/png',
         },
         {

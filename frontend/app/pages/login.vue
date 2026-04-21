@@ -66,7 +66,13 @@ async function submit() {
 <template>
   <div class="login-stack">
     <div class="login-hero">
-      <h1>Kartiki</h1>
+      <img
+        src="/kartiki-logo.svg"
+        alt="Kartiki"
+        class="login-logo"
+        width="180"
+        height="180"
+      />
       <p class="tr-subtle">Covoiturage temps réel, une seule route.</p>
     </div>
     <Card>
@@ -130,11 +136,16 @@ async function submit() {
 }
 .login-hero {
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
 }
-.login-hero h1 {
-  margin: 0;
-  font-size: 2rem;
-  color: var(--p-primary-color);
+.login-logo {
+  display: block;
+  width: 180px;
+  max-width: 60vw;
+  height: auto;
 }
 .login-form {
   display: flex;

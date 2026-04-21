@@ -101,7 +101,7 @@ watch(
   <div class="admin-shell">
     <aside class="admin-sidebar">
       <div class="admin-brand">
-        <i class="pi pi-shield" />
+        <img src="/kartiki-logo.svg" alt="" class="admin-brand-logo" />
         <span>Kartiki · Admin</span>
       </div>
       <nav class="admin-nav">
@@ -165,7 +165,7 @@ watch(
     >
       <template #header>
         <div class="admin-brand">
-          <i class="pi pi-shield" />
+          <img src="/kartiki-logo.svg" alt="" class="admin-brand-logo" />
           <span>Kartiki · Admin</span>
         </div>
       </template>
@@ -238,8 +238,10 @@ watch(
   color: var(--p-primary-color);
   font-size: 1rem;
 }
-.admin-brand i {
-  font-size: 1.25rem;
+.admin-brand-logo {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
 }
 
 .admin-nav {
@@ -272,6 +274,7 @@ watch(
 .admin-link-active {
   background: var(--p-primary-color);
   color: var(--p-primary-contrast-color);
+  box-shadow: inset 3px 0 0 0 var(--kartiki-teal);
 }
 .admin-link-active:hover {
   background: var(--p-primary-color);

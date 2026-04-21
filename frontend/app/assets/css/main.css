@@ -1,3 +1,26 @@
+/*
+ * Kartiki brand palette — extracted from the logo.
+ *
+ * - `--kartiki-navy*`   : deep navy, the dominant brand color (also wired as
+ *                         PrimeVue `primary` via KartikiPreset in nuxt.config).
+ * - `--kartiki-teal*`   : lagoon/sky tones, use for secondary accents, badges,
+ *                         driver-online indicators.
+ * - `--kartiki-green*`  : tropical green, use for success/certification states
+ *                         or anything evoking the island.
+ *
+ * Consume in any scoped style via `var(--kartiki-teal)` etc. Keep PrimeVue's
+ * own `--p-*` tokens for standard UI (buttons, inputs, surfaces, text).
+ */
+:root {
+  --kartiki-navy: #0c4489;
+  --kartiki-navy-dark: #051e40;
+  --kartiki-navy-light: #3c66a6;
+  --kartiki-teal: #0eacc9;
+  --kartiki-teal-light: #29c4ca;
+  --kartiki-green: #0ca94b;
+  --kartiki-green-dark: #098c3d;
+}
+
 *,
 *::before,
 *::after {
