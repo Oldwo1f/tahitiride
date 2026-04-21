@@ -9,6 +9,7 @@ import type {
 } from '~/types/api'
 import { DESTINATION_GROUPS, getDestination } from '~/utils/destinations'
 import { usePreferencesStore } from '~/stores/preferences'
+import { usePresenceStore } from '~/stores/presence'
 
 type MapMode = 'passenger' | 'driver'
 
@@ -26,6 +27,7 @@ const tripStore = useTripStore()
 const driversStore = useDriversStore()
 const passengersStore = usePassengersStore()
 const prefStore = usePreferencesStore()
+const presence = usePresenceStore()
 const { inferDirection } = useDirection()
 
 useLiveGeolocation()
@@ -53,8 +55,22 @@ function pickFavorite(key: string | null) {
   if (!key) return
   destination.value = key
 }
-const passengerWaiting = ref(false)
-const driverOnline = ref(false)
+/**
+ * Presence state is hoisted to `usePresenceStore` so that it survives
+ * navigation away from /map (e.g. going to /scan to show the QR code):
+ * a local `ref` here would reset to `false` on every re-mount and make
+ * the driver appear offline even though the websocket — and therefore
+ * the backend `driver_status` row — is still up. We expose computed
+ * wrappers so the rest of the file keeps the original `.value` API.
+ */
+const passengerWaiting = computed<boolean>({
+  get: () => presence.passengerWaiting,
+  set: (value) => presence.setPassengerWaiting(value),
+})
+const driverOnline = computed<boolean>({
+  get: () => presence.driverOnline,
+  set: (value) => presence.setDriverOnline(value),
+})
 const vehicles = ref<Vehicle[]>([])
 const activeTrip = ref<Trip | null>(null)
 const pickMode = ref(false)
@@ -422,28 +438,6 @@ function clearManualPosition() {
   })
 }
 
-function resyncRealtimeState() {
-  if (!effective.value) return
-  if (mode.value === 'driver' && driverOnline.value) {
-    socket.emit('driver:online', {
-      direction: direction.value,
-      destination: destination.value,
-      lng: effective.value.lng,
-      lat: effective.value.lat,
-      heading: effective.value.heading,
-      speed: effective.value.speed,
-    })
-  }
-  if (mode.value === 'passenger' && passengerWaiting.value) {
-    socket.emit('passenger:wait', {
-      direction: direction.value,
-      destination: destination.value,
-      lng: effective.value.lng,
-      lat: effective.value.lat,
-    })
-  }
-}
-
 /**
  * Fetch a passenger-facing distance/duration/fare estimate as soon as the
  * user picks a destination. We debounce to avoid hammering the API when
@@ -545,12 +539,10 @@ const insufficientForRoundTrip = computed<boolean>(() => {
 
 onMounted(async () => {
   await Promise.all([loadVehicles(), loadActiveTrip(), loadWalletBalance()])
-  socket.on('connect', resyncRealtimeState)
   socket.on('wallet:request:updated', onWalletRequestUpdated)
 })
 
 onBeforeUnmount(() => {
-  socket.off('connect', resyncRealtimeState)
   socket.off('wallet:request:updated', onWalletRequestUpdated)
   if (estimateDebounce) clearTimeout(estimateDebounce)
   if (estimateAbort) estimateAbort.abort()

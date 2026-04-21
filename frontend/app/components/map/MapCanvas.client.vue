@@ -30,36 +30,6 @@ let ro: ResizeObserver | null = null
 const ready = ref(false)
 const hasCenteredOnSelf = ref(false)
 
-const TRIANGLE_IMAGE_ID = 'car-triangle'
-const TRIANGLE_SIZE = 64
-
-function buildTriangleIcon(size: number): {
-  width: number
-  height: number
-  data: Uint8ClampedArray
-} {
-  const canvas = document.createElement('canvas')
-  canvas.width = size
-  canvas.height = size
-  const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('Canvas 2D context unavailable')
-  ctx.clearRect(0, 0, size, size)
-  // Triangle pointing up (north). Vertical alignment leaves margin at top/bottom
-  // so rotation around the icon center keeps it inside the bounds.
-  const margin = size * 0.1
-  ctx.beginPath()
-  ctx.moveTo(size / 2, margin)
-  ctx.lineTo(size - margin, size - margin)
-  ctx.lineTo(margin, size - margin)
-  ctx.closePath()
-  // Solid black fill: when registered with sdf: true, the alpha channel is
-  // re-used as a distance field that can be tinted with `icon-color`.
-  ctx.fillStyle = '#000'
-  ctx.fill()
-  const imageData = ctx.getImageData(0, 0, size, size)
-  return { width: size, height: size, data: imageData.data }
-}
-
 function toDriversGeoJson(): FeatureCollection<
   Point,
   Record<string, unknown>
@@ -261,7 +231,7 @@ async function showPopupAt(
 
   const { $mapbox } = useNuxtApp()
   if (popup) popup.remove()
-  popup = new $mapbox.Popup({ offset: kind === 'driver' ? 18 : 14, closeButton: true })
+  popup = new $mapbox.Popup({ offset: 14, closeButton: true })
     .setLngLat(coords)
     .setHTML(html)
     .addTo(map)
@@ -306,11 +276,6 @@ onMounted(async () => {
   map.on('load', () => {
     if (!map) return
 
-    if (!map.hasImage(TRIANGLE_IMAGE_ID)) {
-      const icon = buildTriangleIcon(TRIANGLE_SIZE)
-      map.addImage(TRIANGLE_IMAGE_ID, icon, { sdf: true })
-    }
-
     map.addSource('drivers', { type: 'geojson', data: toDriversGeoJson() })
     map.addSource('passengers', {
       type: 'geojson',
@@ -320,21 +285,13 @@ onMounted(async () => {
 
     map.addLayer({
       id: 'drivers-layer',
-      type: 'symbol',
+      type: 'circle',
       source: 'drivers',
-      layout: {
-        'icon-image': TRIANGLE_IMAGE_ID,
-        'icon-size': 0.55,
-        'icon-rotate': ['coalesce', ['get', 'heading'], 0],
-        'icon-rotation-alignment': 'map',
-        'icon-allow-overlap': true,
-        'icon-ignore-placement': true,
-        'icon-anchor': 'center',
-      },
       paint: {
-        'icon-color': '#0ea5e9',
-        'icon-halo-color': '#ffffff',
-        'icon-halo-width': 1.5,
+        'circle-radius': 9,
+        'circle-color': '#0ea5e9',
+        'circle-stroke-color': '#ffffff',
+        'circle-stroke-width': 2,
       },
     })
     map.addLayer({
@@ -367,34 +324,11 @@ onMounted(async () => {
       id: 'self-layer',
       type: 'circle',
       source: 'self',
-      layout: {
-        visibility: props.mode === 'driver' ? 'none' : 'visible',
-      },
       paint: {
         'circle-radius': 12,
         'circle-color': '#22c55e',
         'circle-stroke-color': '#fff',
         'circle-stroke-width': 3,
-      },
-    })
-    map.addLayer({
-      id: 'self-triangle-layer',
-      type: 'symbol',
-      source: 'self',
-      layout: {
-        visibility: props.mode === 'driver' ? 'visible' : 'none',
-        'icon-image': TRIANGLE_IMAGE_ID,
-        'icon-size': 0.7,
-        'icon-rotate': ['coalesce', ['get', 'heading'], 0],
-        'icon-rotation-alignment': 'map',
-        'icon-allow-overlap': true,
-        'icon-ignore-placement': true,
-        'icon-anchor': 'center',
-      },
-      paint: {
-        'icon-color': '#22c55e',
-        'icon-halo-color': '#ffffff',
-        'icon-halo-width': 2,
       },
     })
 
@@ -463,28 +397,6 @@ watch(
     if (v && popup) {
       popup.remove()
       popup = null
-    }
-  },
-)
-
-watch(
-  () => props.mode,
-  (m) => {
-    if (!map || !ready.value) return
-    const isDriver = m === 'driver'
-    if (map.getLayer('self-layer')) {
-      map.setLayoutProperty(
-        'self-layer',
-        'visibility',
-        isDriver ? 'none' : 'visible',
-      )
-    }
-    if (map.getLayer('self-triangle-layer')) {
-      map.setLayoutProperty(
-        'self-triangle-layer',
-        'visibility',
-        isDriver ? 'visible' : 'none',
-      )
     }
   },
 )
