@@ -30,7 +30,7 @@ export default defineNuxtConfig({
 
   app: {
     head: {
-      title: 'Tahiti Ride',
+      title: 'Kartiki',
       viewport:
         'width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no',
       meta: [
@@ -71,8 +71,8 @@ export default defineNuxtConfig({
     injectRegister: 'auto',
     strategies: 'generateSW',
     manifest: {
-      name: 'Tahiti Ride',
-      short_name: 'TahitiRide',
+      name: 'Kartiki',
+      short_name: 'Kartiki',
       description: 'Covoiturage décentralisé en temps réel pour Tahiti',
       lang: 'fr-PF',
       theme_color: '#0ea5e9',

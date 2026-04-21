@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ------------------------------------------------------------------
-# Tahiti Ride — script de déploiement serveur
+# Kartiki — script de déploiement serveur
 # ------------------------------------------------------------------
 # Usage : ./scripts/deploy.sh [SERVICE] [OPTIONS]
 #
@@ -51,7 +51,7 @@ GIT_BRANCH=""
 
 print_help() {
   cat <<'EOF'
-Tahiti Ride — script de déploiement serveur
+Kartiki — script de déploiement serveur
 
 Usage : ./scripts/deploy.sh [SERVICE] [OPTIONS]
 

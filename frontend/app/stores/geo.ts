@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import type { GeolocationFix } from '~/types/api'
 
-const MANUAL_KEY = 'tahiti-ride-manual-pos'
+const MANUAL_KEY = 'kartiki-manual-pos'
 
 interface ManualStored {
   lng: number

@@ -4,7 +4,7 @@ import { Controller, Get } from '@nestjs/common';
 export class AppController {
   @Get()
   root() {
-    return { ok: true, service: 'tahiti-ride-backend' };
+    return { ok: true, service: 'kartiki-backend' };
   }
 
   @Get('health')

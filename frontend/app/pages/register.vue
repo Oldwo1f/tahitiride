@@ -73,7 +73,7 @@ async function submit() {
   <div class="login-stack">
     <div class="login-hero">
       <h1>Inscription</h1>
-      <p class="tr-subtle">Rejoignez le réseau Tahiti Ride.</p>
+      <p class="tr-subtle">Rejoignez le réseau Kartiki.</p>
     </div>
     <Card>
       <template #content>

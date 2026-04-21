@@ -11,7 +11,7 @@ interface ReminderEntry extends CertificationExpiringEvent {
 }
 
 const DISMISS_TTL_MS = 24 * 60 * 60 * 1000 // 24h
-const STORAGE_KEY = 'tahiti-cert-reminders'
+const STORAGE_KEY = 'kartiki-cert-reminders'
 
 interface PersistedReminders {
   entries: Record<string, ReminderEntry>

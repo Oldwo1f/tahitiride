@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { jwtDecode } from 'jwt-decode'
 import type { AuthResponse, AuthUser } from '~/types/api'
 
-const STORAGE_KEY = 'tahiti-ride-auth'
+const STORAGE_KEY = 'kartiki-auth'
 
 interface StoredAuth {
   token: string

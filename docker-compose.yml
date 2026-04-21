@@ -1,29 +1,29 @@
 services:
   db:
     image: postgis/postgis:16-3.4
-    container_name: tahiti_ride_db
+    container_name: kartiki_db
     restart: unless-stopped
     environment:
-      POSTGRES_USER:     ${DATABASE_USER:-tahiti}
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-tahiti}
-      POSTGRES_DB:       ${DATABASE_NAME:-tahiti_ride}
+      POSTGRES_USER:     ${DATABASE_USER:-kartiki}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-kartiki}
+      POSTGRES_DB:       ${DATABASE_NAME:-kartiki}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
       test:
-        ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-tahiti} -d ${DATABASE_NAME:-tahiti_ride}"]
+        ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-kartiki} -d ${DATABASE_NAME:-kartiki}"]
       interval: 5s
       timeout: 5s
       retries: 20
     networks:
-      - tahiti_net
+      - kartiki_net
 
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    image: tahiti-ride-backend:latest
-    container_name: tahiti_ride_backend
+    image: kartiki-backend:latest
+    container_name: kartiki_backend
     restart: unless-stopped
     depends_on:
       db:
@@ -34,9 +34,9 @@ services:
 
       DATABASE_HOST: db
       DATABASE_PORT: 5432
-      DATABASE_USER:     ${DATABASE_USER:-tahiti}
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-tahiti}
-      DATABASE_NAME:     ${DATABASE_NAME:-tahiti_ride}
+      DATABASE_USER:     ${DATABASE_USER:-kartiki}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-kartiki}
+      DATABASE_NAME:     ${DATABASE_NAME:-kartiki}
 
       JWT_SECRET:     ${JWT_SECRET:?JWT_SECRET is required in .env}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
@@ -80,15 +80,15 @@ services:
       retries: 10
       start_period: 30s
     networks:
-      - tahiti_net
+      - kartiki_net
       - traefik_net
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=${TRAEFIK_NETWORK:-n8n_default}"
-      - "traefik.http.routers.tahitiride-backend.entrypoints=${TRAEFIK_ENTRYPOINT_HTTPS:-websecure}"
-      - "traefik.http.routers.tahitiride-backend.rule=Host(`${PUBLIC_API_DOMAIN:?PUBLIC_API_DOMAIN required in .env}`)"
-      - "traefik.http.routers.tahitiride-backend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-mytlschallenge}"
-      - "traefik.http.services.tahitiride-backend.loadbalancer.server.port=3001"
+      - "traefik.http.routers.kartiki-backend.entrypoints=${TRAEFIK_ENTRYPOINT_HTTPS:-websecure}"
+      - "traefik.http.routers.kartiki-backend.rule=Host(`${PUBLIC_API_DOMAIN:?PUBLIC_API_DOMAIN required in .env}`)"
+      - "traefik.http.routers.kartiki-backend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-mytlschallenge}"
+      - "traefik.http.services.kartiki-backend.loadbalancer.server.port=3001"
 
   frontend:
     build:
@@ -99,8 +99,8 @@ services:
         NUXT_PUBLIC_API_BASE:    https://${PUBLIC_API_DOMAIN}
         NUXT_PUBLIC_SOCKET_URL:  https://${PUBLIC_API_DOMAIN}
         NUXT_PUBLIC_MAPBOX_TOKEN: ${NUXT_PUBLIC_MAPBOX_TOKEN:?NUXT_PUBLIC_MAPBOX_TOKEN required in .env}
-    image: tahiti-ride-frontend:latest
-    container_name: tahiti_ride_frontend
+    image: kartiki-frontend:latest
+    container_name: kartiki_frontend
     restart: unless-stopped
     depends_on:
       backend:
@@ -112,22 +112,22 @@ services:
       retries: 3
       start_period: 10s
     networks:
-      - tahiti_net
+      - kartiki_net
       - traefik_net
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=${TRAEFIK_NETWORK:-n8n_default}"
-      - "traefik.http.routers.tahitiride-frontend.entrypoints=${TRAEFIK_ENTRYPOINT_HTTPS:-websecure}"
-      - "traefik.http.routers.tahitiride-frontend.rule=Host(`${PUBLIC_DOMAIN}`)"
-      - "traefik.http.routers.tahitiride-frontend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-mytlschallenge}"
-      - "traefik.http.services.tahitiride-frontend.loadbalancer.server.port=80"
+      - "traefik.http.routers.kartiki-frontend.entrypoints=${TRAEFIK_ENTRYPOINT_HTTPS:-websecure}"
+      - "traefik.http.routers.kartiki-frontend.rule=Host(`${PUBLIC_DOMAIN}`)"
+      - "traefik.http.routers.kartiki-frontend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-mytlschallenge}"
+      - "traefik.http.services.kartiki-frontend.loadbalancer.server.port=80"
 
 volumes:
   pgdata:
   uploads:
 
 networks:
-  tahiti_net:
+  kartiki_net:
     driver: bridge
   traefik_net:
     external: true

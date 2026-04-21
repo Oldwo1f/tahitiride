@@ -1,4 +1,4 @@
-# Tahiti Ride - MVP
+# Kartiki - MVP
 
 Système hybride entre covoiturage et bus pour Tahiti : une route principale, des points d'arrêt informels, tout temps réel.
 
@@ -26,11 +26,11 @@ docker compose up -d db
 
 ```bash
 sudo -u postgres psql <<'SQL'
-CREATE USER tahiti WITH PASSWORD 'tahiti';
-CREATE DATABASE tahiti_ride OWNER tahiti;
-\c tahiti_ride
+CREATE USER kartiki WITH PASSWORD 'kartiki';
+CREATE DATABASE kartiki OWNER kartiki;
+\c kartiki
 CREATE EXTENSION IF NOT EXISTS postgis;
-GRANT ALL ON SCHEMA public TO tahiti;
+GRANT ALL ON SCHEMA public TO kartiki;
 SQL
 ```
 
@@ -242,7 +242,7 @@ Le volume `uploads` se sauvegarde comme la base :
 
 ```bash
 docker run --rm \
-  -v tahiti_ride_uploads:/data \
+  -v kartiki_uploads:/data \
   -v "$PWD":/backup \
   alpine tar czf /backup/uploads-$(date +%F).tar.gz -C /data .
 ```
@@ -254,22 +254,22 @@ docker run --rm \
 Architecture cible : **3 conteneurs** (`db`, `backend`, `frontend`) + un Traefik existant qui termine TLS et fait du virtual-hosting via deux sous-domaines :
 
 ```
-                         ┌─ tahitiride.aito-flow.com ───── frontend (nginx, PWA statique)
+                         ┌─ kartiki.aito-flow.com ──────── frontend (nginx, PWA statique)
 Browser ──TLS──▶ Traefik ┤
-                         └─ apitahitiride.aito-flow.com ── backend (NestJS, REST + Socket.IO)
+                         └─ apikartiki.aito-flow.com ───── backend (NestJS, REST + Socket.IO)
                                                                   │
                                                           db (PostGIS, interne)
 ```
 
-Aucun port n'est publié sur l'hôte par les conteneurs Tahiti Ride : Traefik les joint via le réseau Docker `n8n_default`.
+Aucun port n'est publié sur l'hôte par les conteneurs Kartiki : Traefik les joint via le réseau Docker `n8n_default`.
 
 ### Prérequis sur le serveur
 
 - Docker + plugin `docker compose`.
 - Un Traefik déjà en route avec un certresolver Let's Encrypt et le réseau Docker partagé (sur ce serveur : `n8n_default` + resolver `mytlschallenge`).
 - Les **deux sous-domaines DNS** doivent pointer vers l'IP du serveur **avant** le premier `up` (sinon Traefik ne pourra pas obtenir les certificats Let's Encrypt) :
-  - `tahitiride.aito-flow.com` → IP serveur (record A/AAAA)
-  - `apitahitiride.aito-flow.com` → IP serveur (record A/AAAA)
+  - `kartiki.aito-flow.com` → IP serveur (record A/AAAA)
+  - `apikartiki.aito-flow.com` → IP serveur (record A/AAAA)
 - Un token public Mapbox (`pk.*`).
 
 ### 1. Copier le projet
@@ -284,14 +284,14 @@ rsync -avz --delete \
   --exclude 'dist' \
   --exclude '.git' \
   --exclude '.env' \
-  /var/www/app/ root@srv960811:/var/www/tahitiride/
+  /var/www/app/ root@srv960811:/var/www/kartiki/
 ```
 
 Le `--exclude '.env'` protège votre `.env` existant sur le serveur.
 
 ### 2. Configurer l'environnement
 
-Sur le serveur, dans `/var/www/tahitiride/` :
+Sur le serveur, dans `/var/www/kartiki/` :
 
 ```bash
 cp .env.example .env
@@ -302,8 +302,8 @@ Valeurs **obligatoires** à renseigner :
 
 | Variable | Valeur |
 |---|---|
-| `PUBLIC_DOMAIN` | `tahitiride.aito-flow.com` |
-| `PUBLIC_API_DOMAIN` | `apitahitiride.aito-flow.com` |
+| `PUBLIC_DOMAIN` | `kartiki.aito-flow.com` |
+| `PUBLIC_API_DOMAIN` | `apikartiki.aito-flow.com` |
 | `DATABASE_PASSWORD` | mot de passe Postgres (long, aléatoire) |
 | `JWT_SECRET` | secret long (`openssl rand -hex 48`) |
 | `MAPBOX_TOKEN` | votre token Mapbox `pk.*` |
@@ -314,7 +314,7 @@ Variables Traefik (les valeurs par défaut correspondent déjà à votre setup `
 ### 3. Build + run
 
 ```bash
-cd /var/www/tahitiride
+cd /var/www/kartiki
 docker compose build
 docker compose up -d
 docker compose ps
@@ -324,32 +324,32 @@ docker compose logs -f backend   # suivre les migrations + boot
 Au premier `up`, Traefik va déclencher le challenge ACME et obtenir 2 certificats (un par sous-domaine). Vérifier :
 
 ```bash
-docker compose logs -f tahiti_ride_backend  | grep -i listening
-docker logs n8n-traefik-1 2>&1 | grep -iE 'tahitiride|certificate'
+docker compose logs -f kartiki_backend  | grep -i listening
+docker logs n8n-traefik-1 2>&1 | grep -iE 'kartiki|certificate'
 ```
 
 ### 4. Vérifier
 
 ```bash
 # Frontend (sert la PWA)
-curl -I https://tahitiride.aito-flow.com
+curl -I https://kartiki.aito-flow.com
 
 # Backend (santé)
-curl https://apitahitiride.aito-flow.com/health
+curl https://apikartiki.aito-flow.com/health
 # => {"ok":true,"ts":"..."}
 
 # Test API d'inscription
-curl -X POST https://apitahitiride.aito-flow.com/api/auth/signup \
+curl -X POST https://apikartiki.aito-flow.com/api/auth/signup \
   -H 'Content-Type: application/json' \
   -d '{"email":"test@example.com","password":"12345678","role":"passenger"}'
 ```
 
-Ensuite, dans un navigateur : `https://tahitiride.aito-flow.com` → la PWA, installable depuis mobile (HTTPS valide grâce à Let's Encrypt).
+Ensuite, dans un navigateur : `https://kartiki.aito-flow.com` → la PWA, installable depuis mobile (HTTPS valide grâce à Let's Encrypt).
 
 ### 5. Mises à jour
 
 ```bash
-cd /var/www/tahitiride
+cd /var/www/kartiki
 # (ou re-rsync depuis votre machine locale)
 git pull
 docker compose build
@@ -360,19 +360,19 @@ Note : `NUXT_PUBLIC_MAPBOX_TOKEN`, `PUBLIC_DOMAIN` et `PUBLIC_API_DOMAIN` sont *
 
 ### Architecture réseau
 
-| Service  | Exposé Traefik via                  | Réseau interne tahiti | Réseau Traefik |
+| Service  | Exposé Traefik via                  | Réseau interne Kartiki | Réseau Traefik |
 |----------|-------------------------------------|------------------------|----------------|
-| frontend | `tahitiride.aito-flow.com` → :80    | `tahiti_net`           | `n8n_default`  |
-| backend  | `apitahitiride.aito-flow.com` → :3001 | `tahiti_net`         | `n8n_default`  |
-| db       | (jamais exposée)                    | `tahiti_net`           | —              |
+| frontend | `kartiki.aito-flow.com` → :80       | `kartiki_net`          | `n8n_default`  |
+| backend  | `apikartiki.aito-flow.com` → :3001  | `kartiki_net`          | `n8n_default`  |
+| db       | (jamais exposée)                    | `kartiki_net`          | —              |
 
-Le frontend appelle le backend en cross-origin via `https://apitahitiride.aito-flow.com`. Le CORS est configuré côté backend pour n'accepter que `https://tahitiride.aito-flow.com` (variable `CORS_ORIGIN` injectée automatiquement à partir de `PUBLIC_DOMAIN`). Le Socket.IO réfléchit l'origine (l'authentification JWT garantit la sécurité).
+Le frontend appelle le backend en cross-origin via `https://apikartiki.aito-flow.com`. Le CORS est configuré côté backend pour n'accepter que `https://kartiki.aito-flow.com` (variable `CORS_ORIGIN` injectée automatiquement à partir de `PUBLIC_DOMAIN`). Le Socket.IO réfléchit l'origine (l'authentification JWT garantit la sécurité).
 
 ### Sauvegarde / restauration de la base
 
 ```bash
-docker compose exec db pg_dump -U tahiti tahiti_ride > backup-$(date +%F).sql
-cat backup.sql | docker compose exec -T db psql -U tahiti tahiti_ride
+docker compose exec db pg_dump -U kartiki kartiki > backup-$(date +%F).sql
+cat backup.sql | docker compose exec -T db psql -U kartiki kartiki
 ```
 
 ### Script de déploiement (`scripts/deploy.sh`)
@@ -410,19 +410,19 @@ docker compose up -d --build
 
 ```bash
 # Voir les routers/services connus de Traefik
-curl -s http://localhost:8080/api/http/routers 2>/dev/null | jq '.[] | select(.name|contains("tahitiride"))'
+curl -s http://localhost:8080/api/http/routers 2>/dev/null | jq '.[] | select(.name|contains("kartiki"))'
 
 # Logs en temps réel
 docker compose logs -f
 
 # Vérifier que le backend est bien dans le réseau Traefik
-docker network inspect n8n_default | grep -A4 tahiti_ride_backend
+docker network inspect n8n_default | grep -A4 kartiki_backend
 ```
 
 Si le certificat Let's Encrypt n'est pas émis :
-- Vérifier que les DNS résolvent bien vers l'IP du serveur (`dig +short tahitiride.aito-flow.com`)
+- Vérifier que les DNS résolvent bien vers l'IP du serveur (`dig +short kartiki.aito-flow.com`)
 - Vérifier que Traefik est joignable en HTTPS depuis Internet (pas de firewall qui bloque le challenge ACME)
-- Lire les logs Traefik : `docker logs n8n-traefik-1 2>&1 | grep -iE 'tahitiride|acme|error' | tail -50`
+- Lire les logs Traefik : `docker logs n8n-traefik-1 2>&1 | grep -iE 'kartiki|acme|error' | tail -50`
 
 ## Connexion Facebook (optionnelle)
 
@@ -433,7 +433,7 @@ Le bouton se cache automatiquement si `NUXT_PUBLIC_FACEBOOK_APP_ID` est vide —
 ### Configurer une app Facebook (5 minutes)
 
 1. Aller sur https://developers.facebook.com/apps/, créer une app de type **Consumer**.
-2. Dans le menu gauche, ajouter le produit **Facebook Login → Web** (renseigner l'URL du site, ex. `http://localhost:3000` en dev, `https://tahitiride.aito-flow.com` en prod).
+2. Dans le menu gauche, ajouter le produit **Facebook Login → Web** (renseigner l'URL du site, ex. `http://localhost:3000` en dev, `https://kartiki.aito-flow.com` en prod).
 3. Dans **App Settings → Basic**, ajouter les domaines dans **App Domains** : `localhost` (dev) puis votre domaine de prod.
 4. Récupérer l'**App ID** et l'**App Secret** dans **App Settings → Basic**.
 5. Renseigner les variables :

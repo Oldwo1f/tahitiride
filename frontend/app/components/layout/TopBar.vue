@@ -20,7 +20,7 @@ const goBack = () => router.back()
       >
         <i class="pi pi-arrow-left" />
       </Button>
-      <h1 class="tb-title">{{ title || 'Tahiti Ride' }}</h1>
+      <h1 class="tb-title">{{ title || 'Kartiki' }}</h1>
       <div class="tb-spacer" />
     </div>
   </header>

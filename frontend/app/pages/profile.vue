@@ -613,6 +613,16 @@ onMounted(() => {
       @click="logout"
     />
 
+    <nav class="profile-legal" aria-label="Liens légaux">
+      <NuxtLink to="/privacy" class="profile-legal-link">
+        Politique de confidentialité
+      </NuxtLink>
+      <span class="profile-legal-sep" aria-hidden="true">·</span>
+      <NuxtLink to="/data-deletion" class="profile-legal-link">
+        Suppression des données
+      </NuxtLink>
+    </nav>
+
     <DriverOnboardingWizard
       v-model:visible="driverWizardOpen"
       @finished="onDriverWizardFinished"
@@ -897,6 +907,29 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+}
+
+.profile-legal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: var(--p-text-muted-color);
+  padding: 0.25rem 0 0.5rem;
+}
+.profile-legal-link {
+  color: var(--p-text-muted-color);
+  text-decoration: none;
+}
+.profile-legal-link:hover,
+.profile-legal-link:focus-visible {
+  color: var(--p-primary-color);
+  text-decoration: underline;
+}
+.profile-legal-sep {
+  user-select: none;
 }
 
 @media (max-width: 480px) {

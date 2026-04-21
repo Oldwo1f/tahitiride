@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { isValidDestinationKey } from '~/utils/destinations'
 
-const STORAGE_KEY = 'tahiti-ride-preferences'
+const STORAGE_KEY = 'kartiki-preferences'
 
 interface Persisted {
   lastDestination: string | null

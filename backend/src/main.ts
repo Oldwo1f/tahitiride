@@ -25,6 +25,6 @@ async function bootstrap() {
   const port = config.get<number>('app.port', 3001);
   await app.listen(port);
   const logger = new (await import('@nestjs/common')).Logger('Bootstrap');
-  logger.log(`Tahiti Ride API listening on :${port}`);
+  logger.log(`Kartiki API listening on :${port}`);
 }
 void bootstrap();

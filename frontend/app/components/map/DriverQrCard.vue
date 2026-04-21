@@ -47,7 +47,7 @@ function printQr() {
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
-    <title>QR Tahiti Ride${safePlate ? ` · ${safePlate}` : ''}</title>
+    <title>QR Kartiki${safePlate ? ` · ${safePlate}` : ''}</title>
     <style>
       :root { color-scheme: light; }
       * { box-sizing: border-box; }
@@ -78,7 +78,7 @@ function printQr() {
   </head>
   <body>
     <div class="sheet">
-      <div class="brand">Tahiti Ride</div>
+      <div class="brand">Kartiki</div>
       <h1 class="title">Scannez ce code pour démarrer&nbsp;/ terminer le trajet</h1>
       <div class="qr">${svg.value}</div>
       ${safePlate ? `<div class="plate">${safePlate}</div>` : ''}

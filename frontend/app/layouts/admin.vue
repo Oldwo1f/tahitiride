@@ -102,7 +102,7 @@ watch(
     <aside class="admin-sidebar">
       <div class="admin-brand">
         <i class="pi pi-shield" />
-        <span>Tahiti Ride · Admin</span>
+        <span>Kartiki · Admin</span>
       </div>
       <nav class="admin-nav">
         <NuxtLink
@@ -166,7 +166,7 @@ watch(
       <template #header>
         <div class="admin-brand">
           <i class="pi pi-shield" />
-          <span>Tahiti Ride · Admin</span>
+          <span>Kartiki · Admin</span>
         </div>
       </template>
       <nav class="admin-nav">

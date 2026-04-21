@@ -66,7 +66,7 @@ async function submit() {
 <template>
   <div class="login-stack">
     <div class="login-hero">
-      <h1>Tahiti Ride</h1>
+      <h1>Kartiki</h1>
       <p class="tr-subtle">Covoiturage temps réel, une seule route.</p>
     </div>
     <Card>
